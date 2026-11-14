@@ -74,6 +74,47 @@ async function fetchNasaPowerData(lat, lon) {
     };
 }
 
+async function fetchUsdaSoilData(lat, lon) {
+    const endpoint = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest";
+
+    // Spatial SQL query finding the dominant soil component at (lon, lat)
+    const sqlQuery = `
+        SELECT TOP 1
+            mu.muname AS soil_name,
+            c.drainagecl AS drainage_class,
+            ch.om_r AS organic_matter_pct,
+            ch.sandtotal_r AS sand_pct,
+            ch.claytotal_r AS clay_pct
+        FROM mapunit mu
+        INNER JOIN component c ON c.mukey = mu.mukey
+        INNER JOIN chorizon ch ON ch.cokey = c.cokey
+        WHERE mu.mukey IN (
+            SELECT * FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('point(${lon} ${lat})')
+        )
+        AND c.majcompflag = 'Yes'
+        ORDER BY c.comppct_r DESC, ch.hzdept_r ASC
+    `;
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format: "JSON+COLUMNNAME", query: sqlQuery })
+    });
+
+    const data = await response.json();
+
+    // If outside the U.S. or no soil data found, return null for fallback handling
+    if (!data.Table || data.Table.length < 2) return null;
+
+    const [soilName, drainage, organicMatter, sand, clay] = data.Table[1];
+    return {
+        soilName,
+        drainageClass: drainage,          // e.g., "Well drained" or "Poorly drained"
+        organicMatterPct: organicMatter,  // e.g., 2.4 (%)
+        sandPct: sand,
+        clayPct: clay
+    };
+}
 
 // Generates standard XYZ tile URLs you can pass into any map overlay
 function getNasaGibsTileUrl(layerType, z, y, x) {
@@ -166,7 +207,6 @@ class Crop {
         waterUse,
         fixesNitrogen,
         erosionControl,
-        equipment,
         reason
     }) {
         this.id = id;
@@ -179,21 +219,16 @@ class Crop {
         this.waterUse = waterUse;
         this.fixesNitrogen = fixesNitrogen;
         this.erosionControl = erosionControl;
-        this.equipment = equipment;
         this.reason = reason;
     }
 
     // Built-in helper method to check if this crop survives a given farm's conditions
-    isSuitableFor(weatherData, soilData, userEquipment) {
+    isSuitableFor(weatherData, soilData) {
         if (weatherData.avgAnnualRainMM < this.minRainMM) return false;
         if (weatherData.avgHeatDaysPerYear > this.maxHeatDays + 15) return false;
         if (weatherData.avgFrostDaysPerYear > this.maxFrostDays + 15) return false;
 
         if (soilData && this.needsWellDrained && soilData.drainageClass && soilData.drainageClass.includes("Poorly")) {
-            return false;
-        }
-
-        if (userEquipment && !this.equipment.includes(userEquipment)) {
             return false;
         }
 
@@ -215,7 +250,6 @@ const CROP_DATABASE = [
         waterUse: "High",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Combine"],
         reason: "High market demand and caloric yield, but requires heavy nitrogen and ample mid-summer moisture."
     }),
     new Crop({
@@ -229,7 +263,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: true,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Combine"],
         reason: "Fixes atmospheric nitrogen in the soil, cutting fertilizer costs for the following grain crop."
     }),
     new Crop({
@@ -243,7 +276,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Protects bare soil over winter, breaks summer pest cycles, and matures before peak July heat."
     }),
     new Crop({
@@ -257,7 +289,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Well-suited to northern climates with severe winters where fall-planted wheat risks winterkill."
     }),
     new Crop({
@@ -271,7 +302,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Row-Crop Planter", "Combine"],
         reason: "Uses ~30% less water than corn and goes dormant during dry spells instead of failing."
     }),
     new Crop({
@@ -285,7 +315,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Fast-maturing cool-season grain tolerant of drought and mild soil salinity."
     }),
     new Crop({
@@ -299,7 +328,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Thrives in cooler, wetter regions while suppressing weeds and building soil structure."
     }),
     new Crop({
@@ -313,7 +341,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Hay / Forage Equipment", "Combine"],
         reason: "Combines wheat's grain quality with rye's cold hardiness, drought tolerance, and disease resistance."
     }),
 
@@ -329,7 +356,6 @@ const CROP_DATABASE = [
         waterUse: "High",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Specialty / Root Harvester", "Row-Crop Planter"],
         reason: "High per-acre revenue in cool, loose, well-drained soils; requires 3–4 year rotation gaps to prevent blight."
     }),
     new Crop({
@@ -343,7 +369,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Specialty / Root Harvester", "Row-Crop Planter"],
         reason: "Thrives in warm sandy loams with moderate water; leafy vines shade soil and suppress late-summer weeds."
     }),
     new Crop({
@@ -357,7 +382,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Specialty / Root Harvester", "Row-Crop Planter"],
         reason: "Deep taproot scavenges leftover nitrogen from lower soil layers and pairs well with small grains."
     }),
     new Crop({
@@ -371,7 +395,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Specialty / Root Harvester"],
         reason: "Heat-loving southern cash crop that benefits strongly from rotation with peanuts or winter cover crops."
     }),
     new Crop({
@@ -385,7 +408,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: true,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Specialty / Root Harvester"],
         reason: "Fixes significant soil nitrogen in warm sandy soils and disrupts cotton nematode cycles."
     }),
     new Crop({
@@ -399,7 +421,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Specialty / Root Harvester"],
         reason: "High per-acre value in Southeast soils; strongly requires small-grain or fescue rotations to prevent soilborne diseases."
     }),
     new Crop({
@@ -413,7 +434,6 @@ const CROP_DATABASE = [
         waterUse: "High",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Ideal for poorly drained heavy clay soils with abundant water where row crops would drown."
     }),
     new Crop({
@@ -427,7 +447,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Combine", "Hay / Forage Equipment"],
         reason: "Deep taproot aerates compacted soils and dense canopy naturally smothers weeds without heavy herbicides."
     }),
 
@@ -443,7 +462,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Combine"],
         reason: "Taproot reaches 5+ feet deep to pull moisture and nutrients out of reach of shallow crops."
     }),
     new Crop({
@@ -457,7 +475,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Breaks cereal disease cycles in wheat rotations and offers strong regional oilseed markets."
     }),
     new Crop({
@@ -471,7 +488,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Low",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Low-input northern rotation crop that pairs well with wheat and pulses to interrupt fungal pathogens."
     }),
     new Crop({
@@ -485,7 +501,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: true,
         erosionControl: "Low",
-        equipment: ["Row-Crop Planter", "Combine"],
         reason: "Fixes nitrogen and matures in 90–100 days, fitting well between potato or sugarbeet years."
     }),
     new Crop({
@@ -499,7 +514,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: true,
         erosionControl: "Low",
-        equipment: ["Grain Drill", "Combine"],
         reason: "Thrives in low-rainfall plains while fixing soil nitrogen and conserving moisture for winter wheat."
     }),
 
@@ -515,7 +529,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: true,
         erosionControl: "High",
-        equipment: ["Broadcast Spreader", "Grain Drill"],
         reason: "Stops winter rain erosion, boosts organic matter, and adds natural nitrogen before spring cash crops."
     }),
     new Crop({
@@ -529,7 +542,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: true,
         erosionControl: "High",
-        equipment: ["Broadcast Spreader", "Grain Drill"],
         reason: "Cold-hardy winter legume capable of supplying 80–120 lbs/acre of natural nitrogen to the next corn crop."
     }),
     new Crop({
@@ -543,7 +555,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Broadcast Spreader", "Grain Drill"],
         reason: "Deep root 'biodrills' through compacted clay hardpans and winter-kills cleanly before spring planting."
     }),
     new Crop({
@@ -557,7 +568,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Broadcast Spreader", "Grain Drill", "Combine"],
         reason: "Matures in just 60 days to fill mid-summer bare gaps, unlock soil phosphorus, and feed pollinators."
     }),
     new Crop({
@@ -571,7 +581,6 @@ const CROP_DATABASE = [
         waterUse: "Medium",
         fixesNitrogen: false,
         erosionControl: "High",
-        equipment: ["Broadcast Spreader", "Grain Drill", "Hay / Forage Equipment"],
         reason: "Dense fibrous root system prevents hillside washouts and improves water infiltration in heavy soils."
     }),
     new Crop({
@@ -585,7 +594,6 @@ const CROP_DATABASE = [
         waterUse: "High",
         fixesNitrogen: true,
         erosionControl: "High",
-        equipment: ["Grain Drill", "Hay / Forage Equipment"],
         reason: "Multi-year deep roots stabilize hillsides, fix high amounts of nitrogen, and supply livestock hay."
     }),
     new Crop({
@@ -599,7 +607,6 @@ const CROP_DATABASE = [
         waterUse: "Low",
         fixesNitrogen: false,
         erosionControl: "Medium",
-        equipment: ["Grain Drill", "Combine"],
         reason: "One of the lowest water-requirement grains available; ideal for extreme drought adaptation."
     })
 ];
