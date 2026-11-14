@@ -123,3 +123,117 @@ async function runApiTest() {
 }
 
 runApiTest();
+
+
+
+
+
+const cropRotationSolutions = [
+  // Tier 1: Wet & High-Rainfall Regimes (GPM: Wet) [Indices 0 - 9]
+  "Corn -> Soybean -> Winter Wheat + Red Clover",
+  "Year 1: Corn -> Winter Wheat | Year 2: Double-Crop Soybean -> Clover",
+  "Winter Wheat -> Rapeseed (Canola) -> Faba Bean -> Oats",
+  "Early-Maturing Corn -> Soybean -> Winter Triticale",
+  "Oats -> Sunn Hemp -> Grain Sorghum -> Pearl Millet (4-Year Break)",
+  "Hotspots: Alfalfa / Sainfoin | Cool Zones: Corn -> Soybean",
+  "Oats -> Reed Canarygrass / Alsike Clover -> Tillage Radish",
+  "Paddy Rice or Taro -> Sesbania / Faba Bean -> Rapeseed",
+  "Salt-Tolerant Barley -> Tall Wheatgrass / Alfalfa -> Sugar Beet",
+  "Spring Barley -> Canola -> Field Pea -> Alfalfa",
+
+  // Tier 2: High-Intensity Storm Regimes (GPM: Stormy) [Indices 10 - 14]
+  "No-Till Corn -> Soybean + Cereal Rye Cover -> Perennial Grass",
+  "No-Till Winter Wheat (Tall Stubble) -> Grain Sorghum -> Cowpea",
+  "Rice or Maize -> Mung Bean -> Mustard / Rapeseed",
+  "Sunflower -> Tillage Radish / Sweetclover -> Winter Wheat",
+  "Winter Rye -> Spring Oats + Red Clover -> Timothy Hay",
+
+  // Tier 3: Erratic & Bimodal Rain Regimes (GPM: Erratic) [Indices 15 - 21]
+  "Winter Wheat -> Sunflower or Safflower -> Chickpea",
+  "Grain Sorghum -> Soybean -> Crimson Clover + Winter Rye",
+  "No-Till Winter Wheat -> Proso Millet -> Yellow Sweetclover",
+  "Pearl Millet -> Tepary Bean or Moth Bean -> Cover Fallow",
+  "Strip-Till Sorghum -> Lentil -> Standing Stubble Fallow",
+  "Ridges: Barley -> Sainfoin | Valleys: Sorghum -> Soybean",
+  "Spring Wheat -> Flax or Camelina -> Field Pea",
+
+  // Tier 4: Seasonal-Shift Regimes (GPM: Seasonal) [Indices 22 - 25]
+  "Winter Wheat or Barley -> Chickpea or Lentil -> Summer Fallow",
+  "Processing Tomato -> Winter Wheat -> Sunflower or Alfalfa",
+  "Almond/Orchard Cover OR Cotton -> Winter Barley -> Safflower",
+  "Durum Wheat -> Crimson Clover / Medic Pasture -> Fallow",
+
+  // Tier 5: Dry & Arid Regimes (GPM: Dry) [Indices 26 - 41]
+  "Pearl Millet -> Cowpea or Tepary Bean -> Chemical/Cover Fallow",
+  "No-Till Winter Wheat -> Proso Millet -> 14-Month Stubble Fallow",
+  "Winter Wheat -> Field Pea or Lentil -> Flax -> Fallow",
+  "Quinoa -> Bitter Potato or Faba Bean -> Andean Lupin (Tarwi)",
+  "Winter Wheat -> Safflower -> Chickpea",
+  "Short-Cycle Foxtail Millet -> Mung Bean -> Fallow",
+  "Alfalfa (2 Years) -> Cotton or Corn -> Winter Barley",
+  "Potato -> Malting Barley -> Sugar Beet -> Alfalfa",
+  "Subsurface-Drip Sorghum -> Winter Wheat -> Sudan Grass",
+  "Winter Wheat -> Strip-Till Corn -> Dry Bean + Windbreak Rye",
+  "Hot Rings: Bermudagrass / Alfalfa | Good Zones: Corn -> Wheat",
+  "Salt-Tolerant Barley -> Sesbania / Tall Wheatgrass -> Cotton",
+  "Hulless Barley -> Field Pea -> Sainfoin Forage",
+  "Artichoke / Fava Bean -> Barley -> Fog-Harvesting Cover Crop",
+  "Spring Wheat -> Canola -> Lentil",
+  "No-Till Winter Wheat -> Grain Sorghum -> Cowpea Cover"
+];
+
+const cropRotationReasons = [
+  // Tier 1 Reasons [Indices 0 - 9]
+  "Maximizes biomass and yield by converting high solar irradiance into grain where water, drainage, and canopy temperatures have no bottlenecks.",
+  "Captures 100% of long subtropical growing degree days and warm humid conditions by harvesting three cash crops across two years.",
+  "Uses cool-season grains, oilseeds, and legumes that thrive in maritime climates with low growing degree days and persistent cloud cover.",
+  "Avoids peak mid-summer canopy heat crashes by pairing early-maturing summer hybrids with cool-season triticale.",
+  "Breaks residue-borne fungal pathogen and soil acidity cycles over four distinct plant families in warm, humid, disease-prone environments.",
+  "Uses ECOSTRESS 70m thermal maps to isolate sandy or compacted hot patches into deep-rooted perennials while keeping cool fertile zones in high-yield row crops.",
+  "Pairs water-tolerant cool-season grasses and clovers with deep tillage radishes to survive saturated lowlands and improve vertical drainage.",
+  "Relies on flood-tolerant crops that thrive under root-zone anoxia while deep brassica taproots fracture wet compaction layers.",
+  "Uses salt-tolerant barley and deep-rooted perennial grasses to lower high water tables and flush accumulated surface salts below the root zone.",
+  "Fits fast-maturing, cold-hardy spring crops inside narrow northern frost-free windows to capture slow-melting snowpack moisture without winterkill.",
+
+  // Tier 2 Reasons [Indices 10 - 14]
+  "Maintains continuous living roots and dense surface residue to absorb kinetic raindrop energy and stop topsoil runoff during intense tropical downpours.",
+  "Leaves tall standing wheat stubble to block drying plains winds while protecting the soil surface from violent convective cloudbursts.",
+  "Capitalizes on heavy monsoon rain bursts with water-loving staples followed by fast-maturing pulses and oilseeds as soils drain.",
+  "Uses deep taproots from sunflowers, radishes, and sweetclover to punch through compacted hardpans so storm runoff can infiltrate the subsoil.",
+  "Protects sloping, thawing ground from spring rain-on-snow erosion using overwintering rye roots and dense perennial sod.",
+
+  // Tier 3 Reasons [Indices 15 - 21]
+  "Shifts primary grain growth into cooler spring months with winter wheat, then uses deep-taproot oilseeds to mine subsoil water during afternoon heat crashes.",
+  "Leverages high atmospheric humidity to keep vapor pressure deficit low, enabling sorghum and soybeans to bridge multi-week dry gaps.",
+  "Combines no-till stubble windbreaks with ultra-water-efficient millet and sweetclover to prevent hot winds from stripping scarce moisture.",
+  "Avoids the 'false start' rain trap by planting ultra-fast desert grains and beans that mature on brief surface showers over dry subsoils.",
+  "Uses strip-tillage and standing crop residue to stop strong winds from flashing off shallow surface moisture after isolated rains.",
+  "Splits fields by 70m thermal topography, placing drought-hardy forage on shallow dry ridges and higher-water crops in moisture-collecting valleys.",
+  "Pairs resilient spring cereals and oilseeds to handle delayed northern thaws followed by unpredictable mid-summer dry spells.",
+
+  // Tier 4 Reasons [Indices 22 - 25]
+  "Completes crop growth using winter and spring rainfall before summer drought arrives, followed by summer fallow to conserve moisture.",
+  "Balances high-value summer irrigated crops with winter wheat that utilizes natural winter rainfall, reducing total annual irrigation demand.",
+  "Manages extreme afternoon stomatal shutdown in hot irrigated valleys by pairing winter grains with deep-rooted safflower or orchard floor covers.",
+  "Relies on winter-annual durum wheat and self-reseeding Mediterranean legumes that finish their life cycles before zero-rain summers begin.",
+
+  // Tier 5 Reasons [Indices 26 - 41]
+  "Uses short-season C4 desert grains and heat-hardy legumes that produce on minimal water, paired with fallow periods to bank sparse rainfall.",
+  "Leaves 12 to 18 inches of standing wheat stubble to cut surface wind speed by up to 70% and bank 14 months of moisture across two seasons.",
+  "Takes advantage of cool temperatures and low evaporation to preserve scarce steppe moisture for winter wheat, pulses, and flax.",
+  "Uses frost-hardy, UV-adapted Andean heritage crops engineered for intense high-altitude solar radiation paired with freezing nights.",
+  "Mines deep silt-loam winter moisture reserves using tap-rooted safflower and winter wheat despite arid surface air.",
+  "Matches brief, infrequent desert rain showers with ultra-short-cycle millets and mung beans that mature before surface moisture evaporates.",
+  "Maximizes water-use efficiency under desert irrigation where mild winds allow high biomass return per drop of water applied.",
+  "Takes advantage of cool nights and moderate winds in irrigated northern basins to achieve high tuber, grain, and root yields with low evaporative waste.",
+  "Uses subsurface drip irrigation and heat-tolerant C4 grasses to prevent extreme afternoon heat from shutting down canopy transpiration.",
+  "Combines strip-till residue and rye windbreaks to shield irrigated canopies from hot, dry advective winds.",
+  "Uses 70m ECOSTRESS maps to transition sandy, overheating center-pivot rings into hardy perennial forage while keeping good zones in grain.",
+  "Reclaims over-irrigated, salinized desert fields using salt-tolerant barley and deep-rooted sesbania to restore drainage and leach salts.",
+  "Fits short-season hulless barley and cold-tolerant sainfoin into high-elevation mountain valleys with brief frost-free windows and dry air.",
+  "Captures coastal marine fog moisture via high humidity and cool canopies to grow specialty vegetables and barley despite near-zero rainfall.",
+  "Capitalizes on cool, cloudy dryland conditions where low evaporative demand allows spring grains and lentils to thrive on minimal rain.",
+  "Eliminates bare-soil evaporation waste in windy, flood-irrigated arid fields by keeping continuous no-till stubble and heat-hardy cover crops."
+];
+
+export { cropRotationSolutions, cropRotationReasons };
