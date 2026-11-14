@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
+    <section id="input-view">
     <header>
         <div id="Main_Title">Greener Farms</div>
     </header>
@@ -40,8 +41,30 @@
             </div>
         </div>
     </form>
+    </section>
 
+    <section id="output-view" class="view hidden">
+        <div class="output-header">
+            <span class="crop-badge">Recommended Strategy</span>
+            <h2 id="output-crop-title">[ Main Crop Title Placeholder ]</h2>
+        </div>
+
+    <!-- Image Placeholder Section -->
+        <div class="output-image-placeholder">
+            <span>[ Image Placeholder: Crop / Farm Diagram ]</span>
+        </div>
+
+    <!-- Explanation Section -->
+        <div class="output-body">
+            <h3>Why this works for your farm</h3>
+            <p id="output-explanation">[ Detailed strategy explanation and agronomic breakdown will go here... ]</p>
+        </div>
+
+        <button id="back-btn" class="btn-secondary">← Back to Inputs</button>
+    </section>
     <!--DONT TOUCH THE BELOW CODE-->
     <script src="index.js"></script>
+
+    
 </body>
 </html>

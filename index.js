@@ -219,3 +219,43 @@ const cropCategoryReasons = [
 
   // Tier 5 Reasons [Indices 26 - 41]
   "Uses short-season C4 desert grains and heat-hardy nitrogen-fixing legumes that produce on minimal water, paired with fallow periods to bank sparse rain.",
+]
+
+
+
+
+
+function displaySolution(cropTitle, explanationText) {
+    const inputView = document.getElementById('input-view');
+    const outputView = document.getElementById('output-view');
+    
+    // Target the placeholder elements in the new output layout
+    const titleElement = document.getElementById('output-crop-title');
+    const explanationElement = document.getElementById('output-explanation');
+
+    // Populate with the passed arguments
+    titleElement.textContent = cropTitle;
+    explanationElement.textContent = explanationText;
+
+    // Toggle views using the hidden class
+    inputView.classList.add('hidden');
+    outputView.classList.remove('hidden');
+}
+
+// Example usage when your form is submitted:
+document.getElementById('farm-form').addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    // Example dummy data representing your generated solution
+    let recommendedCrop = "Cover Cropped Winter Rye & Legumes";
+    let strategyDetails = "Based on your clay soil and goal of soil health, planting a winter rye cover crop will prevent erosion, improve organic matter, and naturally fix nitrogen before your spring planting cycle.";
+
+    // Call the switcher function with our arguments
+    displaySolution(recommendedCrop, strategyDetails);
+});
+
+// Back button handler to return to the input form
+document.getElementById('back-btn').addEventListener('click', function() {
+    document.getElementById('output-view').classList.add('hidden');
+    document.getElementById('input-view').classList.remove('hidden');
+});
