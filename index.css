@@ -77,6 +77,7 @@ header{
 
 
 
+
 /*Page 2 */
 
 .hidden {
@@ -92,11 +93,12 @@ header{
 .output-header {
     border-bottom: 2px solid var(--border-green);
     padding-bottom: 0.75rem;
+    text-align: center;
 }
 
 .crop-badge {
     background-color: var(--light-green);
-    color: #2e7d32;
+    color: rgb(19, 93, 19);
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
     font-size: 0.85rem;
@@ -105,9 +107,10 @@ header{
 }
 
 #output-crop-title {
-    color: #1b5e20;
+    color: rgb(19, 93, 19);
     margin: 0.5rem 0 0 0;
     font-size: 1.6rem;
+    text-align: center;
 }
 
 /* Image Placeholder Box */
