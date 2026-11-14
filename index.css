@@ -17,3 +17,9 @@ header{
     font-size: 40px;
     font-family: PlaywriteCU, Courier, monospace;
 }
+#SearchBar{
+    margin-top: 30px;
+    color: aquamarine;
+    text-align: center;
+    margin: 2px solid rgb(232, 21, 21);
+}
