@@ -5,9 +5,13 @@
 
 *{
     margin: 0px;
-    background-color: rgb(15, 30, 72);
     box-sizing: border-box;
 }
+
+body{
+    background-image: linear-gradient(#d6d2c6,rgb(201, 243, 241));
+}
+
 header{
     text-align: center;
 }
@@ -36,13 +40,16 @@ header{
     height: 300px;
     background-color: green;
     vertical-align: top;
+    border: 3px solid blue;
 }
 #Conditions{
     display: inline-block;
     margin-left: 5%;
     width: 25%;
     height: 300px;
-    background-color: aqua;
+    background-color: rgb(47, 155, 218);
+    border-radius: 20px;
+    border: 3px solid rgb(14, 108, 38);
 }
 #Information_Container{
     margin-top: 30px;
@@ -52,12 +59,13 @@ header{
 .option_specification{
     display: block;
 }
-#equipment{
+.option_label{
+    display: block;
     margin-top: 20px;
-    text-align: center;
-    color: rgb(230, 255, 247);
-}
-#Equipment_label{
     font-size: 10px;
     color: rgb(250, 250, 250);
+}
+#conditions_label{
+    margin-top: 10px;
+    font-size: 20px;
 }
