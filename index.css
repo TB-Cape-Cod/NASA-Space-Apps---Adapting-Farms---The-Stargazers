@@ -23,3 +23,6 @@ header{
     text-align: center;
     margin: 2px solid rgb(232, 21, 21);
 }
+#written_location{
+    width: 80%;
+}
