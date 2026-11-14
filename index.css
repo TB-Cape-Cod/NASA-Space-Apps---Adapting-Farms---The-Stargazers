@@ -29,13 +29,13 @@ header{
     background-color: rgb(255, 255, 255);
 }
 #World_Map{
-    margin-top: 20px;
     border-radius: 20px;
     text-align: center;
     display: inline-block;
     width: 60%;
     height: 300px;
     background-color: green;
+    vertical-align: top;
 }
 #Conditions{
     display: inline-block;
@@ -43,9 +43,12 @@ header{
     width: 25%;
     height: 300px;
     background-color: aqua;
+    vertical-align: top;
 }
 #Information_Container{
-   text-align: center;
+    margin-top: 30px;
+    text-align: center;
+   
 }
 .option_specification{
     display: block;
