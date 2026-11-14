@@ -1,12 +1,19 @@
+@font-face {
+    font-family: PlaywriteCU;
+    src: url(fonts/Playwrite_CU/PlaywriteCU-VariableFont_wght.ttf);
+}
+
 *{
     margin: 0px;
+    background-color: rgb(247, 244, 241);
     box-sizing: border-box;
 }
 header{
-    border: 2px solid black;
+    text-align: center;
 }
 #Main_Title{
-    color: green;
-    font-family: 'Courier New', Courier, monospace;
-    border: 2px solid red;
+    margin-top: 20px;
+    color: rgb(71, 175, 71);
+    font-size: 40px;
+    font-family: PlaywriteCU, Courier, monospace;
 }
