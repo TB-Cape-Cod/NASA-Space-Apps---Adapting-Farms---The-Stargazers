@@ -25,4 +25,28 @@ header{
 }
 #written_location{
     width: 80%;
+    border-radius: 30px;
+    background-color: rgb(255, 255, 255);
+}
+#World_Map{
+    margin-top: 20px;
+    border-radius: 20px;
+    text-align: center;
+    display: inline-block;
+    width: 60%;
+    height: 300px;
+    background-color: green;
+}
+#Conditions{
+    display: inline-block;
+    margin-left: 5%;
+    width: 25%;
+    height: 300px;
+    background-color: aqua;
+}
+#Information_Container{
+   text-align: center;
+}
+.option_specification{
+    display: block;
 }
