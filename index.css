@@ -9,7 +9,9 @@
 }
 
 body{
-    background-image: linear-gradient(#d6d2c6,rgb(201, 243, 241));
+    background-image: linear-gradient(beige,rgb(151, 244, 239));
+    background-repeat: no-repeat;
+    height: 100vh;
 }
 
 header{
