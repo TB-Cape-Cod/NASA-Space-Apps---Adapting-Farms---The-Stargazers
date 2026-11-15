@@ -1004,3 +1004,133 @@ async function fetchDataForCoordinates(lat, lon) {
         console.error("❌ Failed to fetch location data:", error);
     }
 }
+
+/* ---------------------------------------------------------------------
+   11. MANUAL LOCATION SEARCH
+   --------------------------------------------------------------------- */
+
+// Convert a typed address or coordinate pair into latitude/longitude.
+async function resolveLocation(input) {
+
+    input = input.trim();
+
+    if (!input) {
+        throw new Error("Please enter a location.");
+    }
+
+    // 1. Check whether the input is coordinates.
+    // Supports:
+    // 35.2271, -80.8431
+    // 35.2271 -80.8431
+    // 35.2271, -80.8431, (35.2271 -80.8431)
+    const coordinateMatch = input.match(
+        /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/
+    );
+
+    if (coordinateMatch) {
+
+        const lat = Number(coordinateMatch[1]);
+        const lon = Number(coordinateMatch[2]);
+
+        // Validate coordinate ranges.
+        if (
+            lat < -90 || lat > 90 ||
+            lon < -180 || lon > 180
+        ) {
+            throw new Error("Invalid coordinates. Latitude must be between -90 and 90, and longitude between -180 and 180.");
+        }
+
+        return { lat, lon };
+    }
+
+    // 2. Otherwise, interpret the input as an address.
+    if (!google.maps.Geocoder) {
+        throw new Error("Google Maps Geocoder is unavailable.");
+    }
+
+    const geocoder = new google.maps.Geocoder();
+
+    const response = await geocoder.geocode({
+        address: input
+    });
+
+    if (!response.results || response.results.length === 0) {
+        throw new Error("Could not find that location. Try a different address or coordinates.");
+    }
+
+    const location = response.results[0].geometry.location;
+
+    return {
+        lat: location.lat(),
+        lon: location.lng()
+    };
+}
+
+
+// Update the Google Map and the shared application location.
+function updateMapLocation(lat, lon) {
+
+    setLocation(lat, lon);
+
+    if (map && marker) {
+
+        const position = { lat, lng: lon };
+
+        marker.setPosition(position);
+        map.setCenter(position);
+        map.setZoom(12);
+    }
+}
+
+
+// Handle the location search button.
+const locationSearchBtn = document.getElementById(
+    "location-search-btn"
+);
+
+if (locationSearchBtn) {
+
+    locationSearchBtn.addEventListener("click", async () => {
+
+        const input = document.getElementById("location-input");
+        const errorElement = document.getElementById("location-error");
+
+        const searchValue = input.value;
+
+        errorElement.textContent = "";
+        locationSearchBtn.disabled = true;
+        locationSearchBtn.textContent = "Searching...";
+
+        try {
+
+            // Convert the user's input into coordinates.
+            const location = await resolveLocation(searchValue);
+
+            const { lat, lon } = location;
+
+            // Save coordinates and update the map.
+            updateMapLocation(lat, lon);
+
+            console.log(
+                `Location found: ${lat.toFixed(4)}, ${lon.toFixed(4)}`
+            );
+
+            // Run the SAME recommendation pipeline used by the map.
+            if (Changer) {
+                Changer.click();
+            }
+
+        } catch (error) {
+
+            console.error("Location search failed:", error);
+
+            errorElement.textContent = error.message;
+
+        } finally {
+
+            locationSearchBtn.disabled = false;
+            locationSearchBtn.textContent = "Search Location";
+
+        }
+    });
+}
