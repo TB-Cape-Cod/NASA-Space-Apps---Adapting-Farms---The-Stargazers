@@ -715,7 +715,6 @@ function explainRotation(seq, profile, soil, evalOptions, d, baselineDetails) {
     if (!soil) gaps.push("No SSURGO soil data for this location (outside the U.S. or no match); drainage and organic matter were not checked.");
     if (soil && soil.drainageClass == null && soil.organicMatterPct == null) gaps.push(`SSURGO matched "${soil.soilName}" but has no drainage or organic matter values there (for example urban land); soil was not checked.`);
     if (profile.source !== "NASA POWER") gaps.push("NASA POWER data was unavailable; climate values are rough estimates from the manual dropdowns, with no seasonal or year-to-year data.");
-    gaps.push("Location-level estimates only; no field-scale data (NDVI, ECOSTRESS, slope) yet.");
     gaps.push("Growing seasons are approximated by fixed month windows, not real planting and harvest dates.");
     gaps.push("Crop thresholds and rotation rules are approximate. A local agronomist or extension office should validate this.");
     gaps.push("Market values are rough national gross revenue per acre, not profit and not local prices. Check USDA AMS Market News for your area.");
