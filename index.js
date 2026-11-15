@@ -910,23 +910,16 @@ function formatRecommendation(result) {
    8. PAGE WIRING
    --------------------------------------------------------------------- */
 
-function displaySolution(cropTitle, explanationText,crops) {
+function displaySolution(cropTitle, explanationText) {
     const inputView = document.getElementById("input-view");
     const outputView = document.getElementById("output-view");
     const titleElement = document.getElementById("output-crop-title");
     const explanationElement = document.getElementById("output-explanation");
-    const image_section = document.getElementById("image_section");
 
     if (inputView && outputView && titleElement && explanationElement) {
         titleElement.textContent = cropTitle;
         explanationElement.textContent = explanationText;
         explanationElement.style.whiteSpace = "pre-wrap"; // keep the line breaks and indentation
-        if (crops && crops.length > 0) {
-            const firstCrop = crops[0];
-
-            image_section.src = `crop_images/${firstCrop.imageId}.jpg`;
-            image_section.alt = firstCrop.name;
-        }
         inputView.classList.add("hidden");
         outputView.classList.remove("hidden");
         return;
@@ -1555,6 +1548,197 @@ function renderPriorities(profile, soil, options, edits) {
     });
 }
 
+/* ---------------------------------------------------------------------
+   13. ROTATION DIAGRAM (fills the image placeholder on the results page)
+   Crops sit on a ring and are joined by arrows in rotation order (clockwise).
+   1 crop = self-loop, 2 = left/right pair, 3 = triangle (two on top, one at the bottom),
+   4 = square, 5+ = regular polygon. A cover crop sits in the middle, and the arrows
+   after a year where it is planted turn green.
+   --------------------------------------------------------------------- */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgEl(tag, attrs = {}, text) {
+    const n = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;   // textContent, so crop names are never parsed as HTML
+    return n;
+}
+
+// Split a name into at most two lines of about maxChars characters.
+function wrapLabel(text, maxChars) {
+    const lines = [""];
+    for (const word of text.split(" ")) {
+        const cur = lines[lines.length - 1];
+        if (!cur) lines[lines.length - 1] = word;
+        else if ((cur + " " + word).length <= maxChars) lines[lines.length - 1] = cur + " " + word;
+        else lines.push(word);
+    }
+    if (lines.length > 2) {
+        const rest = lines.slice(1).join(" ");
+        return [lines[0], rest.length > maxChars ? rest.slice(0, maxChars - 1) + "…" : rest];
+    }
+    return lines;
+}
+
+// Where a line from the centre of a box toward (tx, ty) crosses the box edge (plus a little padding).
+function rectEdge(cx, cy, w, h, tx, ty, pad = 6) {
+    const dx = tx - cx, dy = ty - cy;
+    const sx = dx ? (w / 2 + pad) / Math.abs(dx) : Infinity;
+    const sy = dy ? (h / 2 + pad) / Math.abs(dy) : Infinity;
+    const s = Math.min(sx, sy);
+    return { x: cx + dx * s, y: cy + dy * s };
+}
+
+// Crop pictures. Each crop looks for  images/<imageId>.png  (for example images/img_corn.png).
+// Change the folder or extension here to match your files. The imageId values are on each crop above.
+const CROP_IMAGE_DIR = "images/";
+const CROP_IMAGE_EXT = ".jpg";
+
+// Shown until the real picture loads, and kept if the file is missing.
+const CROP_EMOJI = {
+    corn: "🌽", soybeans: "🫘", winter_wheat: "🌾", spring_wheat: "🌾", sorghum: "🌾", barley: "🌾",
+    oats: "🌾", triticale: "🌾", potatoes: "🥔", sweet_potatoes: "🍠", sugarbeets: "🌱", cotton: "🌿",
+    peanuts: "🥜", tobacco: "🍂", rice: "🍚", sunflowers: "🌻", canola: "🌼", flax: "🌱",
+    dry_beans: "🫘", chickpeas: "🫘", clover_rye: "☘️", hairy_vetch: "🌿", oilseed_radish: "🌱",
+    buckwheat: "🌾", annual_ryegrass: "🌱", alfalfa: "🌿", millet: "🌾"
+};
+
+// Draw a crop's picture in a size x size square with its top-left corner at (x, y).
+function addCropPicture(svg, crop, x, y, size) {
+    const fallback = svgEl("text", { x: x + size / 2, y: y + size * 0.82, "text-anchor": "middle", "font-size": Math.round(size * 0.85) },
+        CROP_EMOJI[crop.id] || "🌱");
+    svg.append(fallback);
+    const img = svgEl("image", { href: `${CROP_IMAGE_DIR}${crop.imageId}${CROP_IMAGE_EXT}`, x, y, width: size, height: size,
+        preserveAspectRatio: "xMidYMid meet" });
+    img.addEventListener("load", () => fallback.remove());   // real picture loaded: drop the emoji
+    img.addEventListener("error", () => img.remove());       // file missing: keep the emoji
+    svg.append(img);
+}
+
+function renderRotationDiagram(seq) {
+    const holder = document.getElementById("paceholder_section");
+    if (!holder) return;
+    holder.replaceChildren();
+    if (!seq || !seq.years.length) {
+        holder.append(el("span", { text: "No rotation to draw." }));
+        return;
+    }
+
+    const W = 640, H = 420, cx = W / 2, cy = 205;
+    const n = seq.years.length;
+    const nodeW = Math.max(96, Math.min(170, 170 - (n - 4) * 14));   // boxes shrink a little for long rotations
+    const nodeH = 92;
+    const maxChars = Math.floor(nodeW / 7.6);
+    const gaps = seq.cover ? seq.cover.gaps : [];
+    const GREEN = "#2e7d32", GREY = "#455a64";
+
+    // Box centres, in rotation order. Year 1 is top-left and the order runs clockwise.
+    let pos;
+    if (n === 1) pos = [{ x: cx, y: 72 }];
+    else if (n === 2) pos = [{ x: cx - 210, y: cy }, { x: cx + 210, y: cy }];
+    else {
+        const rx = 230, ry = 160;
+        pos = seq.years.map((_, i) => {
+            const a = (-90 - 180 / n + i * 360 / n) * Math.PI / 180;   // a flat top edge: 3 = two on top, 4 = square
+            return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) };
+        });
+    }
+
+    const svg = svgEl("svg", {
+        viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img",
+        "aria-label": `Rotation cycle: ${seq.years.map(c => c.name).join(", then ")}, then back to the first crop.` +
+            (seq.cover ? ` ${seq.cover.crop.name} is planted as a cover crop after year ${gaps.map(g => g + 1).join(" and ")}.` : "")
+    });
+    svg.style.maxWidth = "680px";
+
+    // Arrowheads in two colours
+    const defs = svgEl("defs");
+    const marker = (id, color) => {
+        const m = svgEl("marker", { id, viewBox: "0 0 10 10", refX: "9", refY: "5", markerUnits: "userSpaceOnUse", markerWidth: "14", markerHeight: "14", orient: "auto" });
+        m.append(svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: color }));
+        return m;
+    };
+    defs.append(marker("rot-arrow", GREY), marker("rot-arrow-cover", GREEN));
+    svg.append(defs);
+
+    const arrow = (d, hasCover, label) => {
+        svg.append(svgEl("path", {
+            d, fill: "none", stroke: hasCover ? GREEN : GREY,
+            "stroke-width": hasCover ? 4 : 2.5, "stroke-linecap": "round",
+            "marker-end": `url(#${hasCover ? "rot-arrow-cover" : "rot-arrow"})`
+        }));
+        if (label)
+            svg.append(svgEl("text", { x: label.x, y: label.y + 4, "text-anchor": "middle", "font-size": 12, "font-weight": "bold", fill: hasCover ? GREEN : GREY }, label.text));
+    };
+
+    // Arrows (drawn first so the boxes sit on top)
+    if (n === 1) {
+        const sx = cx + nodeW / 2 + 6, sy = pos[0].y, ex = cx + 30, ey = pos[0].y + nodeH / 2 + 6;
+        arrow(`M ${sx},${sy} C ${sx + 130},${sy - 10} ${sx + 130},${sy + 140} ${ex},${ey}`, gaps.includes(0),
+            { x: 565, y: 150, text: gaps.includes(0) ? "every year + cover" : "every year" });
+    } else if (n === 2) {
+        const aR = pos[0].x + nodeW / 2 + 6, bL = pos[1].x - nodeW / 2 - 6;
+        arrow(`M ${aR},${cy - 14} Q ${cx},44 ${bL},${cy - 14}`, gaps.includes(0), gaps.includes(0) ? { x: cx, y: 100, text: "+ cover" } : null);
+        arrow(`M ${bL},${cy + 14} Q ${cx},381 ${aR},${cy + 14}`, gaps.includes(1), gaps.includes(1) ? { x: cx, y: 318, text: "+ cover" } : null);
+    } else {
+        for (let i = 0; i < n; i++) {
+            const a = pos[i], b = pos[(i + 1) % n];
+            const s = rectEdge(a.x, a.y, nodeW, nodeH, b.x, b.y);
+            const e = rectEdge(b.x, b.y, nodeW, nodeH, a.x, a.y);
+            const mx = (s.x + e.x) / 2, my = (s.y + e.y) / 2;
+            const vx = mx - cx, vy = my - cy, len = Math.hypot(vx, vy) || 1;
+            arrow(`M ${s.x},${s.y} L ${e.x},${e.y}`, gaps.includes(i),
+                gaps.includes(i) ? { x: mx + vx / len * 18, y: my + vy / len * 18, text: "+ cover" } : null);
+        }
+    }
+
+    // Crop boxes
+    seq.years.forEach((c, i) => {
+        const { x, y } = pos[i];
+        svg.append(svgEl("rect", { x: x - nodeW / 2, y: y - nodeH / 2, width: nodeW, height: nodeH, rx: 14,
+            fill: c.fixesNitrogen ? "#c8e6c9" : "#fff8e1", stroke: "#135d13", "stroke-width": 2 }));
+        svg.append(svgEl("text", { x, y: y - 32, "text-anchor": "middle", "font-size": 11, "font-weight": "bold", fill: "#607d8b" }, `YEAR ${i + 1}`));
+        addCropPicture(svg, c, x - 18, y - 28, 36);
+        const lines = wrapLabel(c.name, maxChars);
+        const startY = lines.length === 1 ? y + 28 : y + 22;
+        lines.forEach((ln, k) =>
+            svg.append(svgEl("text", { x, y: startY + k * 15, "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: "#263238" }, ln)));
+    });
+
+    // Middle: the cover crop, or a note that the cycle repeats
+    if (seq.cover) {
+        const cw = 210, ch = 112;
+        svg.append(svgEl("rect", { x: cx - cw / 2, y: cy - ch / 2, width: cw, height: ch, rx: 16,
+            fill: "#e8f5e9", stroke: GREEN, "stroke-width": 2, "stroke-dasharray": "6 4" }));
+        svg.append(svgEl("text", { x: cx, y: cy - 42, "text-anchor": "middle", "font-size": 11, "font-weight": "bold", fill: GREEN }, "COVER CROP"));
+        addCropPicture(svg, seq.cover.crop, cx - 16, cy - 36, 32);
+        const lines = wrapLabel(seq.cover.crop.name, Math.floor(cw / 7.6));
+        const startY = lines.length === 1 ? cy + 15 : cy + 11;
+        lines.forEach((ln, k) =>
+            svg.append(svgEl("text", { x: cx, y: startY + k * 15, "text-anchor": "middle", "font-size": 13, "font-weight": "bold", fill: "#1b5e20" }, ln)));
+        svg.append(svgEl("text", { x: cx, y: cy + 47, "text-anchor": "middle", "font-size": 11, fill: GREEN },
+            `after year ${gaps.map(g => g + 1).join(", ")}`));
+    } else {
+        svg.append(svgEl("text", { x: cx, y: cy + 4, "text-anchor": "middle", "font-size": 13, "font-style": "italic", fill: "#78909c" },
+            `No cover crop. Repeats after year ${n}.`));
+    }
+
+    // Legend
+    [["#c8e6c9", "Fixes nitrogen"], ["#fff8e1", "Other crop"]].forEach(([fill, label], i) => {
+        const lx = 14 + i * 130;
+        svg.append(svgEl("rect", { x: lx, y: H - 24, width: 14, height: 14, rx: 3, fill, stroke: "#135d13" }));
+        svg.append(svgEl("text", { x: lx + 20, y: H - 12, "font-size": 12, fill: "#455a64" }, label));
+    });
+
+    // Swap the dashed placeholder box for the drawing
+    holder.style.height = "auto";
+    holder.style.background = "#fff";
+    holder.style.border = "2px solid #cfd8dc";
+    holder.style.padding = "8px";
+    holder.append(svg);
+}
+
 // Run the recommendation on the confirmed data and show it.
 function showRecommendation(profile, soil, options, edits) {
     try {
@@ -1562,11 +1746,8 @@ function showRecommendation(profile, soil, options, edits) {
         const text = formatRecommendation(result);
         console.log(text);
         const top = result.strategies[0];
-        displaySolution(
-            top ? rotationTitle(top.seq) : "No rotation found",
-            text,
-            top ? top.seq.years : []
-        );
+        displaySolution(top ? rotationTitle(top.seq) : "No rotation found", text);
+        renderRotationDiagram(top ? top.seq : null);
     } catch (err) {
         console.error(err);
         displaySolution("Something went wrong", "Could not build a recommendation. Check the console for details.");
