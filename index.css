@@ -76,7 +76,10 @@ header{
     border-radius: 30px;
     text-align: center;
 }
-
+#location-input{
+    border-radius: 15px;
+    width: 40%;
+}
 
 
 
