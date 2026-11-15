@@ -200,9 +200,10 @@ function growingWindow(crop, weather) {
 
 class Crop {
     constructor({ id, name, category, minRainMM, maxHeatDays, maxFrostDays,
-                  needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason }) {
+                  needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason, imageId }) {
         Object.assign(this, { id, name, category, minRainMM, maxHeatDays, maxFrostDays,
                               needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason });
+        this.imageId = imageId ?? `img_${id}`;   // key for this crop's picture; change to match your image files
         this.season = "summer"; // overwritten by SEASON_BY_ID below
     }
 
@@ -259,116 +260,116 @@ class Crop {
 // Verify against those sources before publishing, and label them "approximate" in the UI.
 const CROP_DATABASE = [
     // --- MAJOR ROW & GRAIN CASH CROPS ---
-    new Crop({ id: "corn", name: "Field Corn (Maize)", category: "High-Yield Cash Grain",
+    new Crop({ id: "corn", imageId: "img_corn", name: "Field Corn (Maize)", category: "High-Yield Cash Grain",
         minRainMM: 550, maxHeatDays: 45, maxFrostDays: 165, needsWellDrained: true,
         waterUse: "High", fixesNitrogen: false, erosionControl: "Low",
         reason: "High market demand and caloric yield, but requires heavy nitrogen and ample mid-summer moisture." }),
-    new Crop({ id: "soybeans", name: "Soybeans", category: "Nitrogen-Fixing Cash Crop",
+    new Crop({ id: "soybeans", imageId: "img_soybeans", name: "Soybeans", category: "Nitrogen-Fixing Cash Crop",
         minRainMM: 500, maxHeatDays: 45, maxFrostDays: 165, needsWellDrained: false,
         waterUse: "Medium", fixesNitrogen: true, erosionControl: "Low",
         reason: "Fixes atmospheric nitrogen in the soil, cutting fertilizer costs for the following grain crop." }),
-    new Crop({ id: "winter_wheat", name: "Winter Wheat", category: "Cool-Season Cash Grain",
+    new Crop({ id: "winter_wheat", imageId: "img_winter_wheat", name: "Winter Wheat", category: "Cool-Season Cash Grain",
         minRainMM: 350, maxHeatDays: 55, maxFrostDays: 190, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "High",
         reason: "Protects bare soil over winter, breaks summer pest cycles, and matures before peak July heat." }),
-    new Crop({ id: "spring_wheat", name: "Spring Wheat", category: "Northern Cash Grain",
+    new Crop({ id: "spring_wheat", imageId: "img_spring_wheat", name: "Spring Wheat", category: "Northern Cash Grain",
         minRainMM: 320, maxHeatDays: 35, maxFrostDays: 210, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Medium",
         reason: "Well-suited to northern climates with severe winters where fall-planted wheat risks winterkill." }),
-    new Crop({ id: "sorghum", name: "Grain Sorghum (Milo)", category: "Drought-Tolerant Cash Grain",
+    new Crop({ id: "sorghum", imageId: "img_sorghum", name: "Grain Sorghum (Milo)", category: "Drought-Tolerant Cash Grain",
         minRainMM: 380, maxHeatDays: 120, maxFrostDays: 160, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Medium",
         reason: "Uses ~30% less water than corn and goes dormant during dry spells instead of failing." }),
-    new Crop({ id: "barley", name: "Barley", category: "Short-Season Cash Grain",
+    new Crop({ id: "barley", imageId: "img_barley", name: "Barley", category: "Short-Season Cash Grain",
         minRainMM: 300, maxHeatDays: 40, maxFrostDays: 205, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Medium",
         reason: "Fast-maturing cool-season grain tolerant of drought and mild soil salinity." }),
-    new Crop({ id: "oats", name: "Oats", category: "Cool-Season Grain / Forage",
+    new Crop({ id: "oats", imageId: "img_oats", name: "Oats", category: "Cool-Season Grain / Forage",
         minRainMM: 350, maxHeatDays: 35, maxFrostDays: 200, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "High",
         reason: "Thrives in cooler, wetter regions while suppressing weeds and building soil structure." }),
-    new Crop({ id: "triticale", name: "Triticale (Wheat-Rye Hybrid)", category: "Resilient Grain / Forage",
+    new Crop({ id: "triticale", imageId: "img_triticale", name: "Triticale (Wheat-Rye Hybrid)", category: "Resilient Grain / Forage",
         minRainMM: 330, maxHeatDays: 50, maxFrostDays: 200, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "High",
         reason: "Combines wheat's grain quality with rye's cold hardiness, drought tolerance, and disease resistance." }),
 
     // --- ROOT, TUBER & SPECIALTY FIELD CROPS ---
-    new Crop({ id: "potatoes", name: "Potatoes", category: "High-Value Root / Tuber Crop",
+    new Crop({ id: "potatoes", imageId: "img_potatoes", name: "Potatoes", category: "High-Value Root / Tuber Crop",
         minRainMM: 500, maxHeatDays: 30, maxFrostDays: 195, needsWellDrained: true,
         waterUse: "High", fixesNitrogen: false, erosionControl: "Low",
         reason: "High per-acre revenue in cool, loose, well-drained soils; requires 3–4 year rotation gaps to prevent blight." }),
-    new Crop({ id: "sweet_potatoes", name: "Sweet Potatoes", category: "Warm-Climate Root Crop",
+    new Crop({ id: "sweet_potatoes", imageId: "img_sweet_potatoes", name: "Sweet Potatoes", category: "Warm-Climate Root Crop",
         minRainMM: 500, maxHeatDays: 120, maxFrostDays: 110, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "Medium",
         reason: "Thrives in warm sandy loams with moderate water; leafy vines shade soil and suppress late-summer weeds." }),
-    new Crop({ id: "sugarbeets", name: "Sugarbeets", category: "Deep-Rooted Cash Crop",
+    new Crop({ id: "sugarbeets", imageId: "img_sugarbeets", name: "Sugarbeets", category: "Deep-Rooted Cash Crop",
         minRainMM: 450, maxHeatDays: 35, maxFrostDays: 190, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "Low",
         reason: "Deep taproot scavenges leftover nitrogen from lower soil layers and pairs well with small grains." }),
-    new Crop({ id: "cotton", name: "Upland Cotton", category: "Warm-Climate Fiber Crop",
+    new Crop({ id: "cotton", imageId: "img_cotton", name: "Upland Cotton", category: "Warm-Climate Fiber Crop",
         minRainMM: 500, maxHeatDays: 130, maxFrostDays: 110, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "Low",
         reason: "Heat-loving southern cash crop that benefits strongly from rotation with peanuts or winter cover crops." }),
-    new Crop({ id: "peanuts", name: "Peanuts", category: "Southern Nitrogen-Fixing Legume",
+    new Crop({ id: "peanuts", imageId: "img_peanuts", name: "Peanuts", category: "Southern Nitrogen-Fixing Legume",
         minRainMM: 500, maxHeatDays: 120, maxFrostDays: 105, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: true, erosionControl: "Low",
         reason: "Fixes significant soil nitrogen in warm sandy soils and disrupts cotton nematode cycles." }),
-    new Crop({ id: "tobacco", name: "Flue-Cured / Burley Tobacco", category: "High-Value Specialty Leaf Crop",
+    new Crop({ id: "tobacco", imageId: "img_tobacco", name: "Flue-Cured / Burley Tobacco", category: "High-Value Specialty Leaf Crop",
         minRainMM: 550, maxHeatDays: 95, maxFrostDays: 125, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "Low",
         reason: "High per-acre value in Southeast soils; strongly requires small-grain or fescue rotations to prevent soilborne diseases." }),
-    new Crop({ id: "rice", name: "Rice", category: "Flood-Tolerant Cash Grain",
+    new Crop({ id: "rice", imageId: "img_rice", name: "Rice", category: "Flood-Tolerant Cash Grain",
         minRainMM: 900, maxHeatDays: 110, maxFrostDays: 115, needsWellDrained: false,
         waterUse: "High", fixesNitrogen: false, erosionControl: "High",
         reason: "Ideal for poorly drained heavy clay soils with abundant water where row crops would drown." }),
     // --- OILSEEDS & DRY PULSES ---
-    new Crop({ id: "sunflowers", name: "Oilseed Sunflowers", category: "Deep-Rooted Drought Oilseed",
+    new Crop({ id: "sunflowers", imageId: "img_sunflowers", name: "Oilseed Sunflowers", category: "Deep-Rooted Drought Oilseed",
         minRainMM: 350, maxHeatDays: 100, maxFrostDays: 175, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Low",
         reason: "Taproot reaches 5+ feet deep to pull moisture and nutrients out of reach of shallow crops." }),
-    new Crop({ id: "canola", name: "Canola (Rapeseed)", category: "Cool-Season Oilseed",
+    new Crop({ id: "canola", imageId: "img_canola", name: "Canola (Rapeseed)", category: "Cool-Season Oilseed",
         minRainMM: 350, maxHeatDays: 35, maxFrostDays: 200, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Medium",
         reason: "Breaks cereal disease cycles in wheat rotations and offers strong regional oilseed markets." }),
-    new Crop({ id: "flax", name: "Flaxseed", category: "Cool-Season Oilseed / Fiber",
+    new Crop({ id: "flax", imageId: "img_flax", name: "Flaxseed", category: "Cool-Season Oilseed / Fiber",
         minRainMM: 320, maxHeatDays: 35, maxFrostDays: 205, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Low",
         reason: "Low-input northern rotation crop that pairs well with wheat and pulses to interrupt fungal pathogens." }),
-    new Crop({ id: "dry_beans", name: "Dry Edible Beans (Pinto / Black)", category: "Short-Season Nitrogen Legume",
+    new Crop({ id: "dry_beans", imageId: "img_dry_beans", name: "Dry Edible Beans (Pinto / Black)", category: "Short-Season Nitrogen Legume",
         minRainMM: 400, maxHeatDays: 45, maxFrostDays: 175, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: true, erosionControl: "Low",
         reason: "Fixes nitrogen and matures in 90–100 days, fitting well between potato or sugarbeet years." }),
-    new Crop({ id: "chickpeas", name: "Chickpeas / Lentils", category: "Dryland Pulse Legume",
+    new Crop({ id: "chickpeas", imageId: "img_chickpeas", name: "Chickpeas / Lentils", category: "Dryland Pulse Legume",
         minRainMM: 300, maxHeatDays: 60, maxFrostDays: 180, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: true, erosionControl: "Low",
         reason: "Thrives in low-rainfall plains while fixing soil nitrogen and conserving moisture for winter wheat." }),
 
     // --- SOIL-BUILDING COVER & FORAGE CROPS ---
-    new Crop({ id: "clover_rye", name: "Crimson Clover + Cereal Rye", category: "Winter Cover Crop Mix",
+    new Crop({ id: "clover_rye", imageId: "img_clover_rye", name: "Crimson Clover + Cereal Rye", category: "Winter Cover Crop Mix",
         minRainMM: 300, maxHeatDays: 80, maxFrostDays: 195, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: true, erosionControl: "High",
         reason: "Stops winter rain erosion, boosts organic matter, and adds natural nitrogen before spring cash crops." }),
-    new Crop({ id: "hairy_vetch", name: "Hairy Vetch", category: "High-Nitrogen Winter Legume",
+    new Crop({ id: "hairy_vetch", imageId: "img_hairy_vetch", name: "Hairy Vetch", category: "High-Nitrogen Winter Legume",
         minRainMM: 350, maxHeatDays: 70, maxFrostDays: 190, needsWellDrained: true,
         waterUse: "Low", fixesNitrogen: true, erosionControl: "High",
         reason: "Cold-hardy winter legume capable of supplying 80–120 lbs/acre of natural nitrogen to the next corn crop." }),
-    new Crop({ id: "oilseed_radish", name: "Forage / Oilseed Radish", category: "Compaction-Breaking Cover Crop",
+    new Crop({ id: "oilseed_radish", imageId: "img_oilseed_radish", name: "Forage / Oilseed Radish", category: "Compaction-Breaking Cover Crop",
         minRainMM: 350, maxHeatDays: 65, maxFrostDays: 185, needsWellDrained: true,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "High",
         reason: "Deep root 'biodrills' through compacted clay hardpans and winter-kills cleanly before spring planting." }),
-    new Crop({ id: "buckwheat", name: "Buckwheat", category: "Fast Summer Smother / Pollinator Crop",
+    new Crop({ id: "buckwheat", imageId: "img_buckwheat", name: "Buckwheat", category: "Fast Summer Smother / Pollinator Crop",
         minRainMM: 350, maxHeatDays: 50, maxFrostDays: 180, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "High",
         reason: "Matures in just 60 days to fill mid-summer bare gaps, unlock soil phosphorus, and feed pollinators." }),
-    new Crop({ id: "annual_ryegrass", name: "Annual Ryegrass", category: "Erosion-Control & Subsoil Cover",
+    new Crop({ id: "annual_ryegrass", imageId: "img_annual_ryegrass", name: "Annual Ryegrass", category: "Erosion-Control & Subsoil Cover",
         minRainMM: 400, maxHeatDays: 60, maxFrostDays: 185, needsWellDrained: false,
         waterUse: "Medium", fixesNitrogen: false, erosionControl: "High",
         reason: "Dense fibrous root system prevents hillside washouts and improves water infiltration in heavy soils." }),
-    new Crop({ id: "alfalfa", name: "Alfalfa", category: "Perennial Forage Legume",
+    new Crop({ id: "alfalfa", imageId: "img_alfalfa", name: "Alfalfa", category: "Perennial Forage Legume",
         minRainMM: 450, maxHeatDays: 55, maxFrostDays: 185, needsWellDrained: true,
         waterUse: "High", fixesNitrogen: true, erosionControl: "High",
         reason: "Multi-year deep roots stabilize hillsides, fix high amounts of nitrogen, and supply livestock hay." }),
-    new Crop({ id: "millet", name: "Proso / Pearl Millet", category: "Emergency Dryland Grain / Forage",
+    new Crop({ id: "millet", imageId: "img_millet", name: "Proso / Pearl Millet", category: "Emergency Dryland Grain / Forage",
         minRainMM: 280, maxHeatDays: 130, maxFrostDays: 165, needsWellDrained: false,
         waterUse: "Low", fixesNitrogen: false, erosionControl: "Medium",
         reason: "One of the lowest water-requirement grains available; ideal for extreme drought adaptation." })
@@ -453,6 +454,7 @@ const HEAVY_N_IDS = new Set(["corn", "potatoes", "cotton", "tobacco", "sugarbeet
 function coverageMonths(crop) {
     if (crop.id === "buckwheat") return { same: [6, 7, 8], carry: [] };   // Jul-Sep summer cover
     const win = SEASON_WINDOWS[crop.season] || SEASON_WINDOWS.perennial;
+    if (crop.season === "perennial") return { same: win, carry: [0, 1, 2] };   // stand lasts until spring planting of the next crop
     if (crop.season === "winter" || crop.season === "cover") {
         const start = win[0];
         return { same: win.filter(m => m >= start), carry: win.filter(m => m < start) };
@@ -468,18 +470,65 @@ function coverFits(prev, cover, next) {
     return prevEndsEarly && nextPlantedLate;
 }
 
-// A rotation: { years: [crop, crop, ...], cover: { crop, after: yearIndex } | null }.
+// Which months of calendar year k have living roots in the ground?
+function yearCoverage(seq, k) {
+    const n = seq.years.length;
+    const prevIdx = (k - 1 + n) % n;
+    const covered = new Set();
+    coverageMonths(seq.years[k]).same.forEach(m => covered.add(m));
+    coverageMonths(seq.years[prevIdx]).carry.forEach(m => covered.add(m));
+    if (seq.cover) {
+        const cv = coverageMonths(seq.cover.crop);
+        if (seq.cover.gaps.includes(k)) cv.same.forEach(m => covered.add(m));
+        if (seq.cover.gaps.includes(prevIdx)) cv.carry.forEach(m => covered.add(m));
+    }
+    return covered;
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// {0,1,2,9,10,11} -> "Oct-Mar" (wraps around the new year); a single month -> "Jun"
+function monthRange(set) {
+    const ms = [...set].sort((a, b) => a - b);
+    if (!ms.length) return "none";
+    if (ms.length === 12) return "all year";
+    const runs = [];
+    for (const m of ms) {
+        const last = runs[runs.length - 1];
+        if (last && m === last[1] + 1) last[1] = m; else runs.push([m, m]);
+    }
+    if (runs.length > 1 && runs[0][0] === 0 && runs[runs.length - 1][1] === 11) {   // join Dec to Jan
+        const tail = runs.pop();
+        runs[0][0] = tail[0];
+        runs[0].wrap = true;
+    }
+    return runs.map(r => r[0] === r[1] ? MONTH_NAMES[r[0]] : `${MONTH_NAMES[r[0]]}-${MONTH_NAMES[r[1]]}`).join(", ");
+}
+
+// A rotation: { years: [crop, crop, ...], cover: { crop, gaps: [yearIndex, ...] } | null }.
+// The cover crop is planted in every gap after a year where the calendar allows it.
 // The cycle repeats, so the last year is followed by the first.
+// Lines for each calendar year: the main crop, the cover crop planted after it (with months), and bare months.
 function describeRotation(seq) {
-    return seq.years.map((c, i) => {
-        let t = `Year ${i + 1}: ${c.name} (${c.season} season)`;
-        if (seq.cover && seq.cover.after === i)
-            t += `, then ${seq.cover.crop.name} as ${seq.cover.crop.id === "buckwheat" ? "a summer cover" : "a fall-to-spring cover"}`;
-        return t;
+    const lines = [];
+    seq.years.forEach((c, i) => {
+        const win = SEASON_WINDOWS[c.season] || SEASON_WINDOWS.perennial;
+        lines.push(`Year ${i + 1}: ${c.name} (${c.season} crop, in the ground about ${monthRange(new Set(win))})`);
+        if (seq.cover && seq.cover.gaps.includes(i)) {
+            const cv = coverageMonths(seq.cover.crop);
+            const months = monthRange(new Set([...cv.same, ...cv.carry]));
+            lines.push(`    then ${seq.cover.crop.name} as ${seq.cover.crop.id === "buckwheat" ? "a summer cover" : "a fall-to-spring cover"} (${months})${seq.cover.crop.fixesNitrogen ? ", nitrogen-fixing" : ""}`);
+        }
+        const covered = yearCoverage(seq, i);
+        const bare = new Set([...Array(12).keys()].filter(m => !covered.has(m)));
+        lines.push(`    ${bare.size ? "Bare ground: " + monthRange(bare) : "No bare months"}`);
     });
+    return lines;
 }
 function rotationTitle(seq) {
-    return seq.years.map(c => c.name).join(" → ") + (seq.cover ? ` (+ ${seq.cover.crop.name} cover)` : "");
+    const cover = seq.cover
+        ? ` (+ ${seq.cover.crop.name} cover after year${seq.cover.gaps.length > 1 ? "s" : ""} ${seq.cover.gaps.map(g => g + 1).join(", ")})`
+        : "";
+    return seq.years.map(c => c.name).join(" → ") + cover;
 }
 
 // How much of the year is the ground bare, and how much rain lands on it?
@@ -487,15 +536,7 @@ function bareSoilStats(seq, profile) {
     const n = seq.years.length;
     let bareMonths = 0, bareRain = 0;
     for (let k = 0; k < n; k++) {
-        const prevIdx = (k - 1 + n) % n;
-        const covered = new Set();
-        coverageMonths(seq.years[k]).same.forEach(m => covered.add(m));
-        coverageMonths(seq.years[prevIdx]).carry.forEach(m => covered.add(m));
-        if (seq.cover) {
-            const cv = coverageMonths(seq.cover.crop);
-            if (seq.cover.after === k) cv.same.forEach(m => covered.add(m));
-            if (seq.cover.after === prevIdx) cv.carry.forEach(m => covered.add(m));
-        }
+        const covered = yearCoverage(seq, k);
         for (let m = 0; m < 12; m++) {
             if (covered.has(m)) continue;
             bareMonths++;
@@ -566,7 +607,7 @@ function computeFactors(seq, profile, soil) {
         if (!HEAVY_N_IDS.has(c.id)) return;
         const pi = (i - 1 + m) % m;
         const prev = mains[pi];
-        const viaCover = !!(seq.cover && seq.cover.after === pi && seq.cover.crop.fixesNitrogen);
+        const viaCover = !!(seq.cover && seq.cover.gaps.includes(pi) && seq.cover.crop.fixesNitrogen);
         heavy.push({ crop: c, prev, viaCover, ok: prev.fixesNitrogen || viaCover });
     });
     const hasLegume = all.some(c => c.fixesNitrogen);
@@ -693,9 +734,12 @@ function buildCandidates(suitable) {
         // no crop may directly follow its own plant family (including wrap-around)
         if (size > 1 && years.some((c, i) => familyOf(c) === familyOf(years[(i + 1) % size]))) continue;
         out.push({ years, cover: null });
-        for (const cover of covers)
+        for (const cover of covers) {
+            const gaps = [];
             for (let p = 0; p < size; p++)
-                if (coverFits(years[p], cover, years[(p + 1) % size])) out.push({ years, cover: { crop: cover, after: p } });
+                if (coverFits(years[p], cover, years[(p + 1) % size])) gaps.push(p);
+            if (gaps.length) out.push({ years, cover: { crop: cover, gaps } });   // cover goes in every gap that fits
+        }
     }
     return out;
 }
@@ -832,12 +876,13 @@ if (backBtn) {
     });
 }
 
-// Set window.currentLocation = { lat, lon } from your Google Maps search later.
-// Until then this falls back to Ames, Iowa so the button does something real.
+// window.currentLocation is set by the Google Map below (click or drag the marker).
+// It falls back to Ames, Iowa only if the map never loaded.
 const Changer = document.getElementById("changer");
 if (Changer) {
     Changer.onclick = async () => {
         const loc = window.currentLocation || { lat: 42.0308, lon: -93.6319 };
+        console.log(`Analyzing location: ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`);
         Changer.disabled = true;
         try {
             const result = await runRecommendation(loc.lat, loc.lon);
@@ -892,73 +937,69 @@ async function runApiTest(label, testLat, testLon, options = {}) {
 
 
 
-
-
-
-
-
-
-
-//other important thing
+/* ---------------------------------------------------------------------
+   10. GOOGLE MAPS (click the map or drag the marker to choose the field location)
+   --------------------------------------------------------------------- */
 
 let map;
 let marker;
 
-function initMap() {
-    // Default coordinates: Ames, Iowa (matching your existing test code)
-    const defaultLat = 42.0308;
-    const defaultLon = -93.6319;
+const DEFAULT_LOCATION = { lat: 42.0308, lon: -93.6319 };   // Ames, Iowa
+window.currentLocation = { ...DEFAULT_LOCATION };           // the Changer button reads this
 
+// Remember the chosen spot so the button analyzes the same place the marker is on.
+function setLocation(lat, lon) {
+    window.currentLocation = { lat, lon };
+}
+
+function initMap() {
     // 1. Create the map instance
     map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: defaultLat, lng: defaultLon },
+        center: { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lon },
         zoom: 10,
-        mapTypeId: 'terrain' // Terrain view is great for farming/topography!
+        mapTypeId: "terrain"
     });
 
-    // 2. Add a draggable marker so users can move it around
+    // 2. Draggable marker
     marker = new google.maps.Marker({
-        position: { lat: defaultLat, lng: defaultLon },
+        position: { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lon },
         map: map,
         draggable: true,
         title: "Drag me to your farm location"
     });
 
-    // 3. Listen for clicks on the map to move the marker and fetch data
+    // 3. Clicking the map moves the marker and saves the location
     map.addListener("click", (event) => {
-        const clickedLat = event.latLng.lat();
-        const clickedLon = event.latLng.lng();
-        
-        marker.setPosition({ lat: clickedLat, lng: clickedLon });
-        fetchDataForCoordinates(clickedLat, clickedLon);
+        const lat = event.latLng.lat();
+        const lon = event.latLng.lng();
+        marker.setPosition({ lat, lng: lon });
+        setLocation(lat, lon);
+        fetchDataForCoordinates(lat, lon);
     });
 
-    // 4. Listen for when the user finishes dragging the marker
+    // 4. Dragging the marker saves the new location when you let go
     marker.addListener("dragend", (event) => {
-        const draggedLat = event.latLng.lat();
-        const draggedLon = event.latLng.lng();
-        
-        fetchDataForCoordinates(draggedLat, draggedLon);
+        const lat = event.latLng.lat();
+        const lon = event.latLng.lng();
+        setLocation(lat, lon);
+        fetchDataForCoordinates(lat, lon);
     });
 }
 
+// Console preview of the data at the chosen spot. The Changer button runs the full recommendation.
 async function fetchDataForCoordinates(lat, lon) {
-    console.log(`Fetching data for Latitude: ${lat.toFixed(4)}, Longitude: ${lon.toFixed(4)}...`);
-
+    console.log(`Location set: ${lat.toFixed(4)}, ${lon.toFixed(4)}. Fetching data...`);
     try {
         const [weather, soil] = await Promise.all([
             fetchNasaPowerData(lat, lon),
             fetchUsdaSoilData(lat, lon)
         ]);
+        if (!weather) { console.warn("NASA POWER returned no data for this spot."); return; }
 
         console.log("✅ Weather Data Loaded:", weather);
         console.log("✅ USDA Soil Data Loaded:", soil);
-
         const recommendations = selectSuitableCrops(weather, soil);
         console.log(`✅ Found ${recommendations.totalSuitable} suitable crops for this location.`);
-        
-        // Here you can update your UI elements or DOM with the results!
-
     } catch (error) {
         console.error("❌ Failed to fetch location data:", error);
     }
