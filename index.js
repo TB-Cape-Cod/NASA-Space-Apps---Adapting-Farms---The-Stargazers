@@ -162,34 +162,59 @@ async function runApiTest() {
             rootZoneWetness: weather.avgRootZoneWetness
         });
 
-        console.log("✅ Seasonal rain (mm):", {
-            winter: weather.winterRainMM,
-            spring: weather.springRainMM,
-            summer: weather.summerRainMM
-        });
-        console.log("✅ Seasonal root-zone wetness (0-1):", {
-            winter: weather.winterWetness,
-            spring: weather.springWetness,
-            summer: weather.summerWetness
-        });
-
-        console.table(MONTHS.map((m, i) => ({
-            month: m,
-            rainMM: weather.avgMonthlyRainMM[i],
-            wetness: weather.avgMonthlyWetness[i]
-        })));
-
-        console.log(`✅ Year-to-year (rain varies by ${weather.rainVariabilityPct}%):`);
-        console.table(Object.keys(weather.yearlyRainMM).map(y => ({
-            year: y,
-            rainMM: weather.yearlyRainMM[y],
-            wetness: weather.yearlyWetness[y]
-        })));
-
         console.log("✅ USDA SSURGO Soil Result:", soil);
+
+        // --- RUN CROP SELECTION ---
+        console.log("\n🌱 Running Crop Selection Algorithm...");
+        const recommendations = selectSuitableCrops(weather, soil);
+        
+        console.log(`✅ Found ${recommendations.totalSuitable} suitable crops for this location.`);
+        
+        // Print a clean summary table of suitable crops
+        console.table(recommendations.suitableCrops.map(c => ({
+            Crop: c.name,
+            Category: c.category,
+            WaterUse: c.waterUse,
+            FixesN: c.fixesNitrogen ? "Yes" : "No"
+        })));
+
     } catch (error) {
         console.error("❌ API Test Failed:", error);
     }
+}
+
+/**
+ * Evaluates weather and soil data against the CROP_DATABASE to recommend suitable crops.
+ * @param {Object} weatherData - The output from fetchNasaPowerData()
+ * @param {Object|null} soilData - The output from fetchUsdaSoilData() (can be null if outside the US)
+ * @param {Array} cropDatabase - Optional custom crop array (defaults to CROP_DATABASE)
+ * @returns {Object} Recommended crops sorted by category and suitability
+ */
+function selectSuitableCrops(weatherData, soilData, cropDatabase = CROP_DATABASE) {
+    // 1. Filter crops that match the environmental and soil criteria
+    const suitableCrops = cropDatabase.filter(crop => crop.isSuitableFor(weatherData, soilData));
+
+    // 2. Group the suitable crops by their category
+    const categorized = {};
+    for (const crop of suitableCrops) {
+        if (!categorized[crop.category]) {
+            categorized[crop.category] = [];
+        }
+        categorized[crop.category].push({
+            id: crop.id,
+            name: crop.name,
+            waterUse: crop.waterUse,
+            fixesNitrogen: crop.fixesNitrogen,
+            erosionControl: crop.erosionControl,
+            reason: crop.reason
+        });
+    }
+
+    return {
+        totalSuitable: suitableCrops.length,
+        suitableCrops: suitableCrops,
+        categorized: categorized
+    };
 }
 
 runApiTest();
