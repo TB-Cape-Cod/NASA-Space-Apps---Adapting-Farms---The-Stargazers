@@ -1619,7 +1619,7 @@ function rectEdge(cx, cy, w, h, tx, ty, pad = 6) {
 
 // Crop pictures. Each crop looks for  images/<imageId>.png  (for example images/img_corn.png).
 // Change the folder or extension here to match your files. The imageId values are on each crop above.
-const CROP_IMAGE_DIR = "images/";
+const CROP_IMAGE_DIR = "crop_images/";
 const CROP_IMAGE_EXT = ".jpg";
 
 // Shown until the real picture loads, and kept if the file is missing.
