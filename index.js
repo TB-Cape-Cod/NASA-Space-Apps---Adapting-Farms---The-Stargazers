@@ -56,15 +56,17 @@ async function fetchNasaPowerData(lat, lon) {
 
         // seasonal rain (growing windows overlap in June on purpose)
         avgMonthlyRainMM: r,
-        springRainMM: r[3] + r[4] + r[5],                    // Apr-Jun
+        springRainMM: r[2] + r[3] + r[4],                    // Mar-May
         summerRainMM: r[5] + r[6] + r[7],                    // Jun-Aug
-        winterRainMM: r[10] + r[11] + r[0] + r[1],           // Nov-Feb
+        autumnRainMM: r[8] + r[9] + r[10],                   // Sep-Nov
+        winterRainMM: r[11] + r[0] + r[1],                   // Dec-Feb
 
         // seasonal root-zone wetness (0-1)
         avgMonthlyWetness: w,
-        springWetness: avgOf(w, [3, 4, 5]),
+        springWetness: avgOf(w, [2, 3, 4]),
         summerWetness: avgOf(w, [5, 6, 7]),
-        winterWetness: avgOf(w, [10, 11, 0, 1]),
+        autumnWetness: avgOf(w, [8, 9, 10]),
+        winterWetness: avgOf(w, [11, 0, 1]),
 
         // year-to-year variability
         yearlyRainMM: Object.fromEntries(years.map(y => [y, Math.round(yearlyRain[y])])),
