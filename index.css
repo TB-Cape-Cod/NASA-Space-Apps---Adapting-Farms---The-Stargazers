@@ -173,3 +173,18 @@ header{
     margin-top: 20px;
     margin-bottom: 20px;
 }
+.strategy-heading {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin: 24px 0 8px;
+}
+
+.section-heading {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 12px 0 4px;
+}
+
+.explain-line {
+  white-space: pre-wrap; /* keeps the indentation */
+}

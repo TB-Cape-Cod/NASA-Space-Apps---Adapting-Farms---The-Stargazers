@@ -575,10 +575,10 @@ function bareSoilStats(seq, profile) {
 
 // Score weights are judgment calls. They are tunable and shown to the farmer.
 const PRESETS = {
-    "Soil & erosion focus": { water: 1, soil: 3, climate: 1, rotation: 2, market: 1 },
-    "Water resilience":     { water: 3, soil: 1, climate: 1, rotation: 1, market: 1 },
-    "Income focus":         { water: 1, soil: 1, climate: 1, rotation: 1, market: 3 },
-    "Balanced":             { water: 1, soil: 1, climate: 1, rotation: 1, market: 1 }
+  "Soil & erosion focus": { water: 1, soil: 3, climate: 1, rotation: 2, market: 1 },
+  "Water resilience":     { water: 3, soil: 1, climate: 1, rotation: 1, market: 1 },
+  "Income focus":         { water: 1, soil: 1, climate: 1, rotation: 1, market: 3 },
+  "Balanced":             { water: 1, soil: 1, climate: 1, rotation: 1, market: 1 }
 };
 
 function totalScore(f, w) {
@@ -910,6 +910,34 @@ function formatRecommendation(result) {
    8. PAGE WIRING
    --------------------------------------------------------------------- */
 
+// Lines of the results text that should be shown as section headings.
+const SECTION_HEADINGS = new Set([
+    "The rotation (repeats after the last year):",
+    "What each crop brings:",
+    "Why this rotation:",
+    "Risks:",
+    "Information gaps:"
+]);
+
+// Show the text line by line, turning the heading lines into real <h2>/<h3> elements
+// so CSS (.strategy-heading, .section-heading, .explain-line) can style them.
+function renderExplanation(container, text) {
+    container.replaceChildren();
+    container.style.whiteSpace = "normal";
+    text.split("\n").forEach(line => {
+        const trimmed = line.trim();
+        let node;
+        if (!line.startsWith(" ") && /\(score \d+\/100/.test(line)) {
+            node = el("h2", { class: "strategy-heading", text: line });
+        } else if (SECTION_HEADINGS.has(trimmed)) {
+            node = el("h3", { class: "section-heading", text: trimmed });
+        } else {
+            node = el("div", { class: "explain-line", text: line || "\u00A0" });
+        }
+        container.append(node);
+    });
+}
+
 function displaySolution(cropTitle, explanationText) {
     const inputView = document.getElementById("input-view");
     const outputView = document.getElementById("output-view");
@@ -918,8 +946,7 @@ function displaySolution(cropTitle, explanationText) {
 
     if (inputView && outputView && titleElement && explanationElement) {
         titleElement.textContent = cropTitle;
-        explanationElement.textContent = explanationText;
-        explanationElement.style.whiteSpace = "pre-wrap"; // keep the line breaks and indentation
+        renderExplanation(explanationElement, explanationText);
         inputView.classList.add("hidden");
         outputView.classList.remove("hidden");
         return;
