@@ -80,7 +80,14 @@ header{
     border-radius: 15px;
     width: 40%;
 }
-
+#location-search-btn{
+    background-color: #7ce1f3;
+    border-radius: 40px;
+    width: 15%;
+}
+#location-search-btn:hover{
+    background-color: #c7f0f7;
+}
 
 
 /*Page 2 */
@@ -157,6 +164,9 @@ header{
     font-family: PlaywriteCU;
     border-radius: 30px;
     border: 2px solid black;
+}
+#changer:hover{
+    background-color: rgb(110, 226, 139);
 }
 #ButtonLeeway{
     text-align: center;
