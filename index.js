@@ -613,7 +613,7 @@ function computeFactors(seq, profile, soil) {
     const hasLegume = all.some(c => c.fixesNitrogen);
     const nSeq = heavy.length ? heavy.filter(h => h.ok).length / heavy.length : (hasLegume ? 1 : 0.6);
     const families = new Set(mains.map(familyOf));
-    const diversity = families.size / m;
+    const diversity = families.size / Math.max(m, 3);   // a 1- or 2-year rotation cannot reach full diversity
     const rotation = 0.5 * nSeq + 0.5 * diversity;
 
     return {
@@ -629,12 +629,17 @@ function explainRotation(seq, profile, soil, evalOptions, d, baselineDetails) {
 
     // Order and nitrogen
     for (const h of d.heavy) {
+        if (h.prev === h.crop) continue;   // single-crop case is flagged separately
         if (h.ok) reasons.push(`${h.crop.name} follows ${h.viaCover ? seq.cover.crop.name + " (a nitrogen-fixing cover)" : h.prev.name + ", a nitrogen fixer"}, so it starts with nitrogen already in the soil.`);
         else risks.push(`${h.crop.name} follows ${h.prev.name}, which does not fix nitrogen; expect higher fertilizer needs.`);
     }
     const legumes = d.all.filter(c => c.fixesNitrogen);
     if (legumes.length) reasons.push(`Nitrogen fixers in the rotation: ${names(legumes)}.`);
     else risks.push("No nitrogen-fixing crop in the rotation; expect higher fertilizer needs.");
+
+    // Shortened rotations (not enough compatible crops for 3 years)
+    if (mains.length === 1) risks.push(`Only one compatible main crop (${mains[0].name}) fits this location, so it would be grown every year. That is not a true rotation; expect disease and pest buildup.`);
+    else if (mains.length === 2) risks.push("Only two compatible main crops from different plant families fit this location, so this is a 2-year rotation.");
 
     // Plant families and disease breaks
     if (mains.length > 1) {
@@ -727,21 +732,25 @@ function cyclicSequences(list, size) {
 function buildCandidates(suitable) {
     const mains = suitable.filter(c => !COVER_IDS.has(c.id));
     const covers = suitable.filter(c => COVER_IDS.has(c.id));
-    const size = Math.min(3, mains.length);
-    const out = [];
-    if (size === 0) return out;   // only cover crops passed; cannot build a rotation
-    for (const years of cyclicSequences(mains, size)) {
-        // no crop may directly follow its own plant family (including wrap-around)
-        if (size > 1 && years.some((c, i) => familyOf(c) === familyOf(years[(i + 1) % size]))) continue;
-        out.push({ years, cover: null });
-        for (const cover of covers) {
-            const gaps = [];
-            for (let p = 0; p < size; p++)
-                if (coverFits(years[p], cover, years[(p + 1) % size])) gaps.push(p);
-            if (gaps.length) out.push({ years, cover: { crop: cover, gaps } });   // cover goes in every gap that fits
+
+    // Try a 3-year rotation first. If the suitable crops cannot make one (too few crops, or too many
+    // from the same plant family), fall back to a 2-year rotation, then a single crop with cover.
+    for (let size = Math.min(3, mains.length); size >= 1; size--) {
+        const out = [];
+        for (const years of cyclicSequences(mains, size)) {
+            // no crop may directly follow its own plant family (including wrap-around)
+            if (size > 1 && years.some((c, i) => familyOf(c) === familyOf(years[(i + 1) % size]))) continue;
+            out.push({ years, cover: null });
+            for (const cover of covers) {
+                const gaps = [];
+                for (let p = 0; p < size; p++)
+                    if (coverFits(years[p], cover, years[(p + 1) % size])) gaps.push(p);
+                if (gaps.length) out.push({ years, cover: { crop: cover, gaps } });   // cover goes in every gap that fits
+            }
         }
+        if (out.length) return out;
     }
-    return out;
+    return [];   // no main crop passed the checks (only cover crops, or nothing)
 }
 
 const seqKey = seq => seq.years.map(c => c.id).sort().join("|") + (seq.cover ? "+" + seq.cover.crop.id : "");
@@ -783,7 +792,8 @@ function recommend(profile, soil, options = {}) {
         });
     }
 
-    return { baseline, strategies, suitableCount: sel.totalSuitable, rejected: sel.rejected, candidateCount: candidates.length };
+    const mainCount = sel.suitableCrops.filter(c => !COVER_IDS.has(c.id)).length;
+    return { baseline, strategies, suitableCount: sel.totalSuitable, mainCount, rejected: sel.rejected, candidateCount: candidates.length };
 }
 
 // Fetch live data, build the profile, and recommend. Entry point for the UI.
@@ -823,13 +833,18 @@ function formatRecommendation(result) {
     const { baseline, strategies, profile } = result;
     if (!strategies.length) {
         const why = (result.rejected || []).slice(0, 10).map(r => `  - ${r.crop.name}: ${r.failures[0]}`).join("\n");
-        return `No rotation could be built: only ${result.suitableCount} crop(s) passed the climate and soil checks at this location.\nMain reasons crops were excluded:\n${why}\nTry the irrigation option, or check the manual inputs.`;
+        const lead = result.suitableCount === 0
+            ? "No crop passed the climate and soil checks at this location."
+            : `${result.suitableCount} crop(s) passed the checks, but only ${result.mainCount} ${result.mainCount === 1 ? "is a main crop" : "are main crops"}, and a rotation needs at least one main crop (cover crops cannot stand alone).`;
+        return `No rotation could be built. ${lead}\nMain reasons crops were excluded:\n${why}\nTry the irrigation option, or check the manual inputs.`;
     }
 
     const out = [];
     out.push(`Recommended rotation: ${rotationTitle(strategies[0].seq)}`);
     if (baseline) out.push(`Compared with your existing rotation (${rotationTitle(baseline.seq)}), which scores ${pct(baseline.total)}/100.`);
     out.push(`Data source: ${profile.source}${result.soil ? " + USDA SSURGO" : ""}. ${result.candidateCount} possible rotations were scored.`);
+    if (result.userEdits)
+        out.push(result.userEdits.length ? `You confirmed the inputs after correcting: ${result.userEdits.join("; ")}.` : "You confirmed the inputs without changes.");
     strategies.forEach(s => { out.push(""); out.push(formatStrategy(s)); });
     if (baseline) { out.push(""); out.push(formatStrategy(baseline)); }
     out.push("");
@@ -876,26 +891,13 @@ if (backBtn) {
     });
 }
 
-// window.currentLocation is set by the Google Map below (click or drag the marker).
-// It falls back to Ames, Iowa only if the map never loaded.
+// window.currentLocation is set by the Google Map below (click, drag the marker, or search).
+// "Submit Location" opens the confirmation pop-up for that spot; the pop-up runs the recommendation.
 const Changer = document.getElementById("changer");
 if (Changer) {
-    Changer.onclick = async () => {
+    Changer.onclick = () => {
         const loc = window.currentLocation || { lat: 42.0308, lon: -93.6319 };
-        console.log(`Analyzing location: ${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`);
-        Changer.disabled = true;
-        try {
-            const result = await runRecommendation(loc.lat, loc.lon);
-            const text = formatRecommendation(result);
-            console.log(text);
-            const top = result.strategies[0];
-            displaySolution(top ? rotationTitle(top.seq) : "No rotation found", text);
-        } catch (err) {
-            console.error(err);
-            displaySolution("Something went wrong", "Could not build a recommendation. Check the console for details.");
-        } finally {
-            Changer.disabled = false;
-        }
+        openConfirmation(loc.lat, loc.lon);
     };
 }
 
@@ -968,42 +970,22 @@ function initMap() {
         title: "Drag me to your farm location"
     });
 
-    // 3. Clicking the map moves the marker and saves the location
+    // 3. Clicking the map moves the marker, saves the location, and opens the confirmation pop-up
     map.addListener("click", (event) => {
         const lat = event.latLng.lat();
         const lon = event.latLng.lng();
         marker.setPosition({ lat, lng: lon });
         setLocation(lat, lon);
-        fetchDataForCoordinates(lat, lon);
     });
 
-    // 4. Dragging the marker saves the new location when you let go
+    // 4. Dragging the marker saves the new location and opens the pop-up when you let go
     marker.addListener("dragend", (event) => {
         const lat = event.latLng.lat();
         const lon = event.latLng.lng();
         setLocation(lat, lon);
-        fetchDataForCoordinates(lat, lon);
     });
 }
 
-// Console preview of the data at the chosen spot. The Changer button runs the full recommendation.
-async function fetchDataForCoordinates(lat, lon) {
-    console.log(`Location set: ${lat.toFixed(4)}, ${lon.toFixed(4)}. Fetching data...`);
-    try {
-        const [weather, soil] = await Promise.all([
-            fetchNasaPowerData(lat, lon),
-            fetchUsdaSoilData(lat, lon)
-        ]);
-        if (!weather) { console.warn("NASA POWER returned no data for this spot."); return; }
-
-        console.log("✅ Weather Data Loaded:", weather);
-        console.log("✅ USDA Soil Data Loaded:", soil);
-        const recommendations = selectSuitableCrops(weather, soil);
-        console.log(`✅ Found ${recommendations.totalSuitable} suitable crops for this location.`);
-    } catch (error) {
-        console.error("❌ Failed to fetch location data:", error);
-    }
-}
 
 /* ---------------------------------------------------------------------
    11. MANUAL LOCATION SEARCH
@@ -1022,7 +1004,6 @@ async function resolveLocation(input) {
     // Supports:
     // 35.2271, -80.8431
     // 35.2271 -80.8431
-    // 35.2271, -80.8431, (35.2271 -80.8431)
     const coordinateMatch = input.match(
         /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/
     );
@@ -1115,10 +1096,7 @@ if (locationSearchBtn) {
                 `Location found: ${lat.toFixed(4)}, ${lon.toFixed(4)}`
             );
 
-            // Run the SAME recommendation pipeline used by the map.
-            if (Changer) {
-                Changer.click();
-            }
+            // Open the confirmation pop-up for the searched location.
 
         } catch (error) {
 
@@ -1133,4 +1111,261 @@ if (locationSearchBtn) {
 
         }
     });
+}
+
+// The form has a single text box, so pressing Enter would submit it and reload the page.
+// Treat Enter as a click on "Search Location" instead.
+const userForm = document.getElementById("User_Information");
+if (userForm) {
+    userForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (locationSearchBtn) locationSearchBtn.click();
+    });
+}
+
+
+/* ---------------------------------------------------------------------
+   12. CONFIRMATION POP-UP
+   After a location is picked, show what the code found and let the farmer
+   correct it before any recommendation is made.
+   --------------------------------------------------------------------- */
+
+const DRAINAGE_CLASSES = [
+    "Excessively drained", "Somewhat excessively drained", "Well drained",
+    "Moderately well drained", "Somewhat poorly drained", "Poorly drained", "Very poorly drained"
+];
+
+let confirmToken = null;   // identifies the latest pop-up request, so a slow lookup cannot overwrite a newer one
+
+// Small helper for building elements safely (text is never parsed as HTML).
+function el(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+        if (k === "text") n.textContent = v;
+        else n.setAttribute(k, v);
+    }
+    kids.forEach(k => { if (k) n.append(k); });
+    return n;
+}
+
+function injectConfirmStyles() {
+    if (document.getElementById("confirm-styles")) return;
+    const st = document.createElement("style");
+    st.id = "confirm-styles";
+    st.textContent = `
+#confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+#confirm-dialog{background:#fffdf5;border:3px solid rgb(19,93,19);border-radius:18px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;padding:20px 24px;color:#263238;font-family:Arial,Helvetica,sans-serif;}
+#confirm-dialog h2{color:rgb(19,93,19);font-size:1.3rem;margin-bottom:10px;text-align:center;}
+#confirm-dialog h3{color:#2c3e50;font-size:1rem;margin:16px 0 6px;border-bottom:1px solid #cfd8dc;padding-bottom:4px;}
+.confirm-intro{line-height:1.5;margin-bottom:8px;}
+.confirm-warn{background:#fff3cd;border-left:4px solid #e0a800;padding:8px 10px;margin:8px 0;line-height:1.4;}
+.confirm-info{font-size:0.9rem;color:#455a64;margin:4px 0;line-height:1.4;}
+.confirm-row{display:flex;flex-direction:column;gap:3px;margin:10px 0;}
+.confirm-row label{font-weight:bold;font-size:0.95rem;}
+.confirm-row small{color:#607d8b;}
+.confirm-row input[type=number],.confirm-row select{padding:6px 8px;border:1px solid #90a4ae;border-radius:8px;font-size:1rem;background:#fff;}
+.confirm-check{display:flex;align-items:center;gap:8px;margin:12px 0;}
+#cf-error{color:#c62828;min-height:1.2em;margin-top:6px;}
+.confirm-buttons{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;}
+.confirm-buttons button{padding:10px 16px;border-radius:24px;border:2px solid black;font-size:1rem;cursor:pointer;}
+#cf-confirm{background:rgb(46,183,80);font-weight:bold;}
+#cf-cancel{background:#eceff1;}
+`;
+    document.head.appendChild(st);
+}
+
+function getConfirmOverlay() {
+    let overlay = document.getElementById("confirm-overlay");
+    if (overlay) return overlay;
+    injectConfirmStyles();
+    overlay = el("div", { id: "confirm-overlay" },
+        el("div", { id: "confirm-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "confirm-title" },
+            el("h2", { id: "confirm-title", text: "Please double-check this information" }),
+            el("div", { id: "confirm-body" })));
+    overlay.style.display = "none";
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeConfirm(); });
+    return overlay;
+}
+
+function closeConfirm() {
+    confirmToken = null;
+    const overlay = document.getElementById("confirm-overlay");
+    if (overlay) overlay.style.display = "none";
+}
+
+// Entry point: called when the farmer picks a location (map click, marker drag, search, or Submit button).
+async function openConfirmation(lat, lon) {
+    const overlay = getConfirmOverlay();
+    const body = document.getElementById("confirm-body");
+    const token = Symbol("confirm");
+    confirmToken = token;
+
+    body.replaceChildren(el("p", { class: "confirm-intro", text: `Looking up NASA climate and USDA soil data for ${lat.toFixed(4)}, ${lon.toFixed(4)}...` }));
+    overlay.style.display = "flex";
+
+    const [weather, soil] = await Promise.all([fetchNasaPowerData(lat, lon), fetchUsdaSoilData(lat, lon)]);
+    if (confirmToken !== token) return;   // the farmer picked another spot or cancelled meanwhile
+
+    console.log("Data found for confirmation:", { lat, lon, weather, soil });
+    renderConfirmation(lat, lon, weather, soil);
+}
+
+function confirmRow(id, label, input, hint) {
+    return el("div", { class: "confirm-row" }, el("label", { for: id, text: label }), input, hint ? el("small", { text: hint }) : null);
+}
+function numberInput(id, value, min, max, step = "1") {
+    const input = el("input", { id, type: "number", min: String(min), max: String(max), step });
+    input.value = value == null ? "" : String(value);
+    return input;
+}
+
+function renderConfirmation(lat, lon, weather, soil) {
+    const body = document.getElementById("confirm-body");
+    const profile = buildProfile(weather, getManualInputs());
+    const live = !!weather;
+    body.replaceChildren();
+
+    body.append(el("p", { class: "confirm-intro",
+        text: `We looked up your field at ${lat.toFixed(4)}, ${lon.toFixed(4)}. You know your land best, so please check these values and correct anything that looks wrong.` }));
+    if (!live) body.append(el("p", { class: "confirm-warn",
+        text: "We could not get NASA POWER climate data for this spot. The numbers below are rough estimates from the Temperature and Humidity dropdowns on the main page. Please correct them if you can." }));
+
+    // ---- Climate
+    body.append(el("h3", { text: live ? `Climate (NASA POWER, average of ${weather.yearsOfData} years)` : "Climate (estimate)" }));
+    body.append(confirmRow("cf-rain", "Average yearly rainfall (mm)", numberInput("cf-rain", profile.avgAnnualRainMM, 0, 6000),
+        live ? `Varies about ${weather.rainVariabilityPct}% from year to year.` : null));
+    body.append(confirmRow("cf-heat", "Days per year at 32°C (90°F) or above", numberInput("cf-heat", profile.avgHeatDaysPerYear, 0, 366)));
+    body.append(confirmRow("cf-frost", "Frost days per year (low of 0°C / 32°F or below)", numberInput("cf-frost", profile.avgFrostDaysPerYear, 0, 366)));
+    if (live) {
+        body.append(el("p", { class: "confirm-info",
+            text: `Rain by season (mm): winter ${weather.winterRainMM}, spring ${weather.springRainMM}, summer ${weather.summerRainMM}, autumn ${weather.autumnRainMM}. If you change yearly rainfall, these are scaled to match.` }));
+        body.append(el("p", { class: "confirm-info",
+            text: `Root-zone wetness: ${weather.avgRootZoneWetness} (0 is bone dry, 1 is saturated).` }));
+    }
+
+    // ---- Soil
+    body.append(el("h3", { text: "Soil (USDA SSURGO)" }));
+    if (soil) body.append(el("p", { class: "confirm-info", text: `Soil type found: ${soil.soilName}` }));
+    else body.append(el("p", { class: "confirm-warn",
+        text: "No USDA soil data was found for this spot (it may be outside the U.S.). If you know your soil, enter it below. Otherwise leave these blank." }));
+
+    const drainSelect = el("select", { id: "cf-drainage" });
+    const known = soil?.drainageClass || "";
+    const options = [""].concat(DRAINAGE_CLASSES);
+    if (known && !DRAINAGE_CLASSES.includes(known)) options.push(known);
+    options.forEach(v => drainSelect.append(el("option", { value: v, text: v || "Not sure" })));
+    drainSelect.value = known;
+    body.append(confirmRow("cf-drainage", "Soil drainage", drainSelect, "How quickly water leaves the field after heavy rain."));
+
+    const omValue = soil && soil.organicMatterPct != null && !isNaN(Number(soil.organicMatterPct)) ? Number(soil.organicMatterPct) : null;
+    body.append(confirmRow("cf-om", "Organic matter (%)", numberInput("cf-om", omValue, 0, 100, "0.1"), "Leave blank if you do not know."));
+
+    // ---- Farm options
+    body.append(el("h3", { text: "Your farm" }));
+    const irrig = el("input", { id: "cf-irrigation", type: "checkbox" });
+    body.append(el("div", { class: "confirm-check" }, irrig,
+        el("label", { for: "cf-irrigation", text: "I can irrigate my fields (a rain shortfall becomes a warning instead of ruling a crop out)" })));
+
+    body.append(el("p", { id: "cf-error" }));
+    const confirmBtn = el("button", { id: "cf-confirm", type: "button", text: "Yes, this looks right. Get my recommendation" });
+    const cancelBtn = el("button", { id: "cf-cancel", type: "button", text: "Cancel" });
+    body.append(el("div", { class: "confirm-buttons" }, cancelBtn, confirmBtn));
+
+    cancelBtn.addEventListener("click", closeConfirm);
+    confirmBtn.addEventListener("click", () => {
+        const v = readConfirmValues();
+        if (v.error) { document.getElementById("cf-error").textContent = v.error; return; }
+        const { profile: p, soil: s, edits } = applyConfirmedValues(profile, soil, v);
+        closeConfirm();
+        showRecommendation(p, s, { irrigated: v.irrigated }, edits);
+    });
+    if (confirmBtn.focus) confirmBtn.focus();
+}
+
+// Read and validate what the farmer left in the form.
+function readConfirmValues() {
+    const num = (id, label, min, max, allowBlank = false) => {
+        const raw = document.getElementById(id).value;
+        if (raw === "" || raw == null) return allowBlank ? { value: null } : { error: `Please enter ${label}.` };
+        const n = Number(raw);
+        if (isNaN(n) || n < min || n > max) return { error: `${label[0].toUpperCase()}${label.slice(1)} must be between ${min} and ${max}.` };
+        return { value: n };
+    };
+    const rain = num("cf-rain", "yearly rainfall", 0, 6000);
+    const heat = num("cf-heat", "the number of hot days", 0, 366);
+    const frost = num("cf-frost", "the number of frost days", 0, 366);
+    const om = num("cf-om", "organic matter", 0, 100, true);
+    for (const r of [rain, heat, frost, om]) if (r.error) return { error: r.error };
+    return {
+        rain: rain.value, heat: heat.value, frost: frost.value, om: om.value,
+        drainage: document.getElementById("cf-drainage").value,
+        irrigated: !!document.getElementById("cf-irrigation").checked
+    };
+}
+
+// Apply the farmer's corrections to copies of the fetched data, and list what changed.
+function applyConfirmedValues(profile, soil, v) {
+    const p = { ...profile };
+    const edits = [];
+
+    if (v.rain !== profile.avgAnnualRainMM) {
+        const old = profile.avgAnnualRainMM;
+        const f = old > 0 ? v.rain / old : 1;
+        if (profile.avgMonthlyRainMM)
+            p.avgMonthlyRainMM = old > 0 ? profile.avgMonthlyRainMM.map(x => Math.round(x * f)) : Array(12).fill(Math.round(v.rain / 12));
+        if (profile.yearlyRainMM)
+            p.yearlyRainMM = Object.fromEntries(Object.entries(profile.yearlyRainMM).map(([y, x]) => [y, Math.round(x * f)]));
+        p.avgAnnualRainMM = v.rain;
+        edits.push(`yearly rain ${old} → ${v.rain} mm`);
+    }
+
+    if (v.heat !== profile.avgHeatDaysPerYear) {
+        if (profile.avgMonthlyHeatDays) {
+            const total = profile.avgMonthlyHeatDays.reduce((a, b) => a + b, 0);
+            p.avgMonthlyHeatDays = total > 0
+                ? profile.avgMonthlyHeatDays.map(x => +(x * v.heat / total).toFixed(1))
+                : profile.avgMonthlyHeatDays.map((x, i) => [5, 6, 7].includes(i) ? +(v.heat / 3).toFixed(1) : 0);   // no heat before: put it in Jun-Aug
+        }
+        edits.push(`hot days ${profile.avgHeatDaysPerYear} → ${v.heat} per year`);
+        p.avgHeatDaysPerYear = v.heat;
+    }
+
+    if (v.frost !== profile.avgFrostDaysPerYear) {
+        edits.push(`frost days ${profile.avgFrostDaysPerYear} → ${v.frost} per year`);
+        p.avgFrostDaysPerYear = v.frost;
+    }
+
+    let s = soil ? { ...soil } : null;
+    const blankSoil = () => ({ soilName: "entered by you", drainageClass: null, organicMatterPct: null, sandPct: null, clayPct: null });
+
+    const oldDrain = soil?.drainageClass || "";
+    if (v.drainage !== oldDrain) {
+        s = s || blankSoil();
+        s.drainageClass = v.drainage || null;
+        edits.push(`soil drainage ${oldDrain || "unknown"} → ${v.drainage || "unknown"}`);
+    }
+
+    const oldOm = soil && soil.organicMatterPct != null && !isNaN(Number(soil.organicMatterPct)) ? Number(soil.organicMatterPct) : null;
+    if (v.om !== oldOm) {
+        s = s || blankSoil();
+        s.organicMatterPct = v.om;
+        edits.push(`organic matter ${oldOm ?? "unknown"} → ${v.om ?? "unknown"}%`);
+    }
+
+    return { profile: p, soil: s, edits };
+}
+
+// Run the recommendation on the confirmed data and show it.
+function showRecommendation(profile, soil, options, edits) {
+    try {
+        const result = { profile, soil, ...recommend(profile, soil, options), userEdits: edits };
+        const text = formatRecommendation(result);
+        console.log(text);
+        const top = result.strategies[0];
+        displaySolution(top ? rotationTitle(top.seq) : "No rotation found", text);
+    } catch (err) {
+        console.error(err);
+        displaySolution("Something went wrong", "Could not build a recommendation. Check the console for details.");
+    }
 }
