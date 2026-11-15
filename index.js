@@ -910,16 +910,23 @@ function formatRecommendation(result) {
    8. PAGE WIRING
    --------------------------------------------------------------------- */
 
-function displaySolution(cropTitle, explanationText) {
+function displaySolution(cropTitle, explanationText,crops) {
     const inputView = document.getElementById("input-view");
     const outputView = document.getElementById("output-view");
     const titleElement = document.getElementById("output-crop-title");
     const explanationElement = document.getElementById("output-explanation");
+    const image_section = document.getElementById("image_section");
 
     if (inputView && outputView && titleElement && explanationElement) {
         titleElement.textContent = cropTitle;
         explanationElement.textContent = explanationText;
         explanationElement.style.whiteSpace = "pre-wrap"; // keep the line breaks and indentation
+        if (crops && crops.length > 0) {
+            const firstCrop = crops[0];
+
+            image_section.src = `crop_images/${firstCrop.imageId}.jpg`;
+            image_section.alt = firstCrop.name;
+        }
         inputView.classList.add("hidden");
         outputView.classList.remove("hidden");
         return;
@@ -1555,7 +1562,11 @@ function showRecommendation(profile, soil, options, edits) {
         const text = formatRecommendation(result);
         console.log(text);
         const top = result.strategies[0];
-        displaySolution(top ? rotationTitle(top.seq) : "No rotation found", text);
+        displaySolution(
+            top ? rotationTitle(top.seq) : "No rotation found",
+            text,
+            top ? top.seq.years : []
+        );
     } catch (err) {
         console.error(err);
         displaySolution("Something went wrong", "Could not build a recommendation. Check the console for details.");
