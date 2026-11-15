@@ -1369,3 +1369,14 @@ function showRecommendation(profile, soil, options, edits) {
         displaySolution("Something went wrong", "Could not build a recommendation. Check the console for details.");
     }
 }
+
+//enter error fixed
+
+const locationInput = document.getElementById("location-input");
+
+locationInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+        event.preventDefault(); // Stop the browser's default Enter behavior
+        resolveLocation();      // Run your location search
+    }
+});
