@@ -889,3 +889,77 @@ async function runApiTest(label, testLat, testLon, options = {}) {
     await runApiTest("Lubbock, Texas (drier, hotter), rainfed", 33.5779, -101.8552);
     await runApiTest("Lubbock, Texas, with irrigation", 33.5779, -101.8552, { irrigated: true });
 })();
+
+
+
+
+
+
+
+
+
+
+//other important thing
+
+let map;
+let marker;
+
+function initMap() {
+    // Default coordinates: Ames, Iowa (matching your existing test code)
+    const defaultLat = 42.0308;
+    const defaultLon = -93.6319;
+
+    // 1. Create the map instance
+    map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: defaultLat, lng: defaultLon },
+        zoom: 10,
+        mapTypeId: 'terrain' // Terrain view is great for farming/topography!
+    });
+
+    // 2. Add a draggable marker so users can move it around
+    marker = new google.maps.Marker({
+        position: { lat: defaultLat, lng: defaultLon },
+        map: map,
+        draggable: true,
+        title: "Drag me to your farm location"
+    });
+
+    // 3. Listen for clicks on the map to move the marker and fetch data
+    map.addListener("click", (event) => {
+        const clickedLat = event.latLng.lat();
+        const clickedLon = event.latLng.lng();
+        
+        marker.setPosition({ lat: clickedLat, lng: clickedLon });
+        fetchDataForCoordinates(clickedLat, clickedLon);
+    });
+
+    // 4. Listen for when the user finishes dragging the marker
+    marker.addListener("dragend", (event) => {
+        const draggedLat = event.latLng.lat();
+        const draggedLon = event.latLng.lng();
+        
+        fetchDataForCoordinates(draggedLat, draggedLon);
+    });
+}
+
+async function fetchDataForCoordinates(lat, lon) {
+    console.log(`Fetching data for Latitude: ${lat.toFixed(4)}, Longitude: ${lon.toFixed(4)}...`);
+
+    try {
+        const [weather, soil] = await Promise.all([
+            fetchNasaPowerData(lat, lon),
+            fetchUsdaSoilData(lat, lon)
+        ]);
+
+        console.log("✅ Weather Data Loaded:", weather);
+        console.log("✅ USDA Soil Data Loaded:", soil);
+
+        const recommendations = selectSuitableCrops(weather, soil);
+        console.log(`✅ Found ${recommendations.totalSuitable} suitable crops for this location.`);
+        
+        // Here you can update your UI elements or DOM with the results!
+
+    } catch (error) {
+        console.error("❌ Failed to fetch location data:", error);
+    }
+}
