@@ -1,14 +1,11 @@
-/* =====================================================================
-   Greener Farms: index.js
-   Pipeline: location -> NASA POWER + USDA SSURGO -> field profile
-             -> crop suitability filter -> rotation scoring -> display
-   ===================================================================== */
 
-/* ---------------------------------------------------------------------
-   1. DATA FETCHING
-   --------------------------------------------------------------------- */
+//A portion of this javascript code was provided on behalf of Gemeni and Claude AI. The other files
+//were entirely human made. The parts of the code created by Ai are labeled as well.
 
-// NASA POWER: daily climate. Returns null on failure so the manual dropdowns can take over.
+
+//Made by Gemeni
+//  1. DATA FETCHING
+
 async function fetchNasaPowerData(lat, lon) {
     try {
         const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M_MAX,T2M_MIN,PRECTOTCORR,GWETROOT&community=AG&longitude=${lon}&latitude=${lat}&start=20210101&end=20251231&format=JSON`;
@@ -31,12 +28,11 @@ async function fetchNasaPowerData(lat, lon) {
         const yearlyWetSum = {}, yearlyWetN = {};
 
         for (const date in rain) {
-            // -999 means missing in POWER. Check every variable we use.
             if (rain[date] === -999 || soilMoisture[date] === -999 ||
                 minT[date] === -999 || maxT[date] === -999) continue;
 
             const year = date.slice(0, 4);
-            const month = +date.slice(4, 6) - 1; // 0 = January
+            const month = +date.slice(4, 6) - 1;
 
             totalRain += rain[date];
             moistureSum += soilMoisture[date];
@@ -134,8 +130,8 @@ async function fetchUsdaSoilData(lat, lon) {
         const [soilName, drainage, organicMatter, sand, clay] = data.Table[1];
         return {
             soilName,
-            drainageClass: drainage,          // e.g., "Well drained" or "Poorly drained"
-            organicMatterPct: organicMatter,  // e.g., 2.4 (%)
+            drainageClass: drainage,          
+            organicMatterPct: organicMatter,  
             sandPct: sand,
             clayPct: clay
         };
@@ -163,11 +159,10 @@ function getNasaGibsTileUrl(layerType, z, y, x) {
     return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${selected.id}/default/${selected.date}/${selected.matrix}/${z}/${y}/${x}.png`;
 }
 
-/* ---------------------------------------------------------------------
-   2. CROP MODEL
-   --------------------------------------------------------------------- */
 
-// Growing windows as month indexes (0 = Jan). Approximate, Northern Hemisphere.
+//Made by Claude
+//2. CROP MODEL
+
 const SEASON_WINDOWS = {
     spring:    [3, 4, 5, 6],                 // Apr-Jul
     summer:    [4, 5, 6, 7, 8],              // May-Sep
@@ -176,16 +171,14 @@ const SEASON_WINDOWS = {
     perennial: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 };
 
-// Rain and root-zone wetness inside one crop's own growing window.
-// The rain a crop needs in its window is its annual minimum scaled by window length.
+
 function growingWindow(crop, weather) {
     const months = SEASON_WINDOWS[crop.season] || SEASON_WINDOWS.perennial;
     const need = Math.round(crop.minRainMM * months.length / 12);
     const got = weather.avgMonthlyRainMM
         ? Math.round(months.reduce((s, m) => s + weather.avgMonthlyRainMM[m], 0))
-        : Math.round(weather.avgAnnualRainMM * months.length / 12); // manual-mode fallback
+        : Math.round(weather.avgAnnualRainMM * months.length / 12); 
 
-    // Days at 32C or above inside this crop's window (annual count if monthly data is missing)
     const heat = weather.avgMonthlyHeatDays
         ? Math.round(months.reduce((s, m) => s + weather.avgMonthlyHeatDays[m], 0))
         : weather.avgHeatDaysPerYear;
@@ -203,9 +196,9 @@ class Crop {
                   needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason, imageId }) {
         Object.assign(this, { id, name, category, minRainMM, maxHeatDays, maxFrostDays,
                               needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason });
-        this.imageId = imageId ?? `img_${id}`;   // key for this crop's picture; change to match your image files
-        this.season = "summer"; // overwritten by SEASON_BY_ID below
-        this.marketValue = null; // approx. gross $/acre, filled from MARKET_VALUE_BY_ID below
+        this.imageId = imageId ?? `img_${id}`;   
+        this.season = "summer"; 
+        this.marketValue = null; 
     }
 
     // Returns { suitable, failures, warnings } so the UI can explain every exclusion.
@@ -407,11 +400,11 @@ CROP_DATABASE.forEach(c => { c.marketValue = MARKET_VALUE_BY_ID[c.id] ?? 0; });
 const marketScore = c =>
     clamp((Math.log((c.marketValue || 0) + 1) - Math.log(100)) / (Math.log(4500) - Math.log(100)));
 
-/* ---------------------------------------------------------------------
-   3. FIELD PROFILE (live data, or manual dropdowns as fallback)
-   --------------------------------------------------------------------- */
+/*Human Made
+   3. Field Profile
+*/
 
-// Rough fallback numbers for when the APIs fail or the location is outside the U.S.
+
 const TEMP_FALLBACK = {
     Hot:  { heat: 80, frost: 0 },
     Warm: { heat: 30, frost: 20 },
@@ -438,10 +431,10 @@ function buildProfile(weather, manual) {
     };
 }
 
-/* ---------------------------------------------------------------------
+/* Made by Claude AI
    4. ROTATION RULES (agronomic facts used to order and score crops)
    Approximate, from general extension guidance. Verify locally.
-   --------------------------------------------------------------------- */
+*/
 
 const clamp = (x, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
 const names = list => list.map(c => c.name).join(", ");
@@ -569,7 +562,7 @@ function bareSoilStats(seq, profile) {
     };
 }
 
-/* ---------------------------------------------------------------------
+/* Made by Gemeni AI
    5. SCORING
    --------------------------------------------------------------------- */
 
@@ -905,11 +898,10 @@ function formatRecommendation(result) {
     return out.join("\n");
 }
 
-/* ---------------------------------------------------------------------
+/* Made by Humans
    8. PAGE WIRING
-   --------------------------------------------------------------------- */
+*/
 
-// Lines of the results text that should be shown as section headings.
 const SECTION_HEADINGS = new Set([
     "The rotation (repeats after the last year):",
     "What each crop brings:",
@@ -918,8 +910,7 @@ const SECTION_HEADINGS = new Set([
     "Information gaps:"
 ]);
 
-// Show the text line by line, turning the heading lines into real <h2>/<h3> elements
-// so CSS (.strategy-heading, .section-heading, .explain-line) can style them.
+
 function renderExplanation(container, text) {
     container.replaceChildren();
     container.style.whiteSpace = "normal";
@@ -951,7 +942,6 @@ function displaySolution(cropTitle, explanationText) {
         return;
     }
 
-    // Fallback so the result is never silently lost if the output elements are missing from the HTML.
     console.warn("Output elements (input-view, output-view, output-crop-title, output-explanation) not all found; using fallback panel.");
     let box = document.getElementById("fallback-output");
     if (!box) {
@@ -971,8 +961,7 @@ if (backBtn) {
     });
 }
 
-// window.currentLocation is set by the Google Map below (click, drag the marker, or search).
-// "Submit Location" opens the confirmation pop-up for that spot; the pop-up runs the recommendation.
+
 const Changer = document.getElementById("changer");
 if (Changer) {
     Changer.onclick = () => {
@@ -981,9 +970,9 @@ if (Changer) {
     };
 }
 
-/* ---------------------------------------------------------------------
+/* Test made by AI
    9. CONSOLE TEST (safe to delete)
-   --------------------------------------------------------------------- */
+*/
 
 async function runApiTest(label, testLat, testLon, options = {}) {
     console.log(`\n========== ${label} (${testLat}, ${testLon}) ==========`);
@@ -1022,30 +1011,28 @@ async function runApiTest(label, testLat, testLon, options = {}) {
 
 
 
-/* ---------------------------------------------------------------------
+/* Made by Gemeni AI
    10. GOOGLE MAPS (click the map or drag the marker to choose the field location)
-   --------------------------------------------------------------------- */
+*/
 
 let map;
 let marker;
 
-const DEFAULT_LOCATION = { lat: 42.0308, lon: -93.6319 };   // Ames, Iowa
-window.currentLocation = { ...DEFAULT_LOCATION };           // the Changer button reads this
+const DEFAULT_LOCATION = { lat: 42.0308, lon: -93.6319 };  
+window.currentLocation = { ...DEFAULT_LOCATION };          
 
-// Remember the chosen spot so the button analyzes the same place the marker is on.
+
 function setLocation(lat, lon) {
     window.currentLocation = { lat, lon };
 }
 
 function initMap() {
-    // 1. Create the map instance
     map = new google.maps.Map(document.getElementById("map"), {
         center: { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lon },
         zoom: 10,
         mapTypeId: "terrain"
     });
 
-    // 2. Draggable marker
     marker = new google.maps.Marker({
         position: { lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lon },
         map: map,
@@ -1053,7 +1040,6 @@ function initMap() {
         title: "Drag me to your farm location"
     });
 
-    // 3. Clicking the map moves the marker, saves the location, and opens the confirmation pop-up
     map.addListener("click", (event) => {
         const lat = event.latLng.lat();
         const lon = event.latLng.lng();
@@ -1061,7 +1047,6 @@ function initMap() {
         setLocation(lat, lon);
     });
 
-    // 4. Dragging the marker saves the new location and opens the pop-up when you let go
     marker.addListener("dragend", (event) => {
         const lat = event.latLng.lat();
         const lon = event.latLng.lng();
@@ -1070,9 +1055,9 @@ function initMap() {
 }
 
 
-/* ---------------------------------------------------------------------
+/* Made by Gemeni AI
    11. MANUAL LOCATION SEARCH
-   --------------------------------------------------------------------- */
+ */
 
 // Convert a typed address or coordinate pair into latitude/longitude.
 async function resolveLocation(input) {
@@ -1207,22 +1192,18 @@ if (userForm) {
 }
 
 
-/* ---------------------------------------------------------------------
+/* Made by Claude AI
    12. CONFIRMATION POP-UP + PRIORITIES POP-UP
-   After a location is picked, show what the code found and let the farmer
-   correct it (and list their current crops). Then ask for their priorities
-   before any recommendation is made.
-   --------------------------------------------------------------------- */
+*/
 
 const DRAINAGE_CLASSES = [
     "Excessively drained", "Somewhat excessively drained", "Well drained",
     "Moderately well drained", "Somewhat poorly drained", "Poorly drained", "Very poorly drained"
 ];
 
-let confirmToken = null;   // identifies the latest pop-up request, so a slow lookup cannot overwrite a newer one
-let confirmExisting = [];  // crop ids the farmer ticked, in the order they ticked them
+let confirmToken = null;  
+let confirmExisting = [];  
 
-// Small helper for building elements safely (text is never parsed as HTML).
 function el(tag, attrs = {}, ...kids) {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -1574,24 +1555,22 @@ function renderPriorities(profile, soil, options, edits) {
     });
 }
 
-/* ---------------------------------------------------------------------
+/* Made by Gemeni
    13. ROTATION DIAGRAM (fills the image placeholder on the results page)
    Crops sit on a ring and are joined by arrows in rotation order (clockwise).
    1 crop = self-loop, 2 = left/right pair, 3 = triangle (two on top, one at the bottom),
    4 = square, 5+ = regular polygon. A cover crop sits in the middle, and the arrows
    after a year where it is planted turn green.
-   --------------------------------------------------------------------- */
+*/
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function svgEl(tag, attrs = {}, text) {
     const n = document.createElementNS(SVG_NS, tag);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-    if (text != null) n.textContent = text;   // textContent, so crop names are never parsed as HTML
+    if (text != null) n.textContent = text;
     return n;
 }
-
-// Split a name into at most two lines of about maxChars characters.
 function wrapLabel(text, maxChars) {
     const lines = [""];
     for (const word of text.split(" ")) {
