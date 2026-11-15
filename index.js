@@ -205,6 +205,7 @@ class Crop {
                               needsWellDrained, waterUse, fixesNitrogen, erosionControl, reason });
         this.imageId = imageId ?? `img_${id}`;   // key for this crop's picture; change to match your image files
         this.season = "summer"; // overwritten by SEASON_BY_ID below
+        this.marketValue = null; // approx. gross $/acre, filled from MARKET_VALUE_BY_ID below
     }
 
     // Returns { suitable, failures, warnings } so the UI can explain every exclusion.
@@ -389,6 +390,23 @@ const SEASON_BY_ID = {
 };
 CROP_DATABASE.forEach(c => { c.season = SEASON_BY_ID[c.id] || "summer"; });
 
+// Approximate U.S. gross revenue per acre per year (yield x typical price), BEFORE input costs.
+// These are rough estimates: verify against USDA NASS QuickStats and AMS Market News, and show
+// them as "approximate" in the UI. Cover crops have no direct sale income (0).
+const MARKET_VALUE_BY_ID = {
+    corn: 850, soybeans: 600, winter_wheat: 420, spring_wheat: 400, sorghum: 400, barley: 400,
+    oats: 300, triticale: 320, potatoes: 3500, sweet_potatoes: 4000, sugarbeets: 1500, cotton: 750,
+    peanuts: 950, tobacco: 4500, rice: 1000, sunflowers: 450, canola: 450, flax: 380,
+    dry_beans: 650, chickpeas: 500, clover_rye: 0, hairy_vetch: 0, oilseed_radish: 0,
+    buckwheat: 0, annual_ryegrass: 0, alfalfa: 900, millet: 300
+};
+CROP_DATABASE.forEach(c => { c.marketValue = MARKET_VALUE_BY_ID[c.id] ?? 0; });
+
+// 0-1 score on a log scale: ~$100/acre = 0, ~$4,500/acre = 1
+// (clamp is defined further down, but this is only called later, so the order is fine)
+const marketScore = c =>
+    clamp((Math.log((c.marketValue || 0) + 1) - Math.log(100)) / (Math.log(4500) - Math.log(100)));
+
 /* ---------------------------------------------------------------------
    3. FIELD PROFILE (live data, or manual dropdowns as fallback)
    --------------------------------------------------------------------- */
@@ -557,17 +575,19 @@ function bareSoilStats(seq, profile) {
 
 // Score weights are judgment calls. They are tunable and shown to the farmer.
 const PRESETS = {
-    "Soil & erosion focus": { water: 1, soil: 3, climate: 1, rotation: 2 },
-    "Water resilience":     { water: 3, soil: 1, climate: 1, rotation: 1 },
-    "Balanced":             { water: 1, soil: 1, climate: 1, rotation: 1 }
+    "Soil & erosion focus": { water: 1, soil: 3, climate: 1, rotation: 2, market: 1 },
+    "Water resilience":     { water: 3, soil: 1, climate: 1, rotation: 1, market: 1 },
+    "Income focus":         { water: 1, soil: 1, climate: 1, rotation: 1, market: 3 },
+    "Balanced":             { water: 1, soil: 1, climate: 1, rotation: 1, market: 1 }
 };
 
 function totalScore(f, w) {
-    const sum = w.water + w.soil + w.climate + w.rotation;
-    return (f.water * w.water + f.soil * w.soil + f.climate * w.climate + f.rotation * w.rotation) / sum;
+    const sum = w.water + w.soil + w.climate + w.rotation + w.market;
+    return (f.water * w.water + f.soil * w.soil + f.climate * w.climate +
+            f.rotation * w.rotation + f.market * w.market) / sum;
 }
 
-// Cheap numeric part: four 0-1 factors plus the details needed to explain them.
+// Cheap numeric part: five 0-1 factors plus the details needed to explain them.
 function computeFactors(seq, profile, soil) {
     const mains = seq.years;
     const all = seq.cover ? [...mains, seq.cover.crop] : mains;
@@ -616,9 +636,13 @@ function computeFactors(seq, profile, soil) {
     const diversity = families.size / Math.max(m, 3);   // a 1- or 2-year rotation cannot reach full diversity
     const rotation = 0.5 * nSeq + 0.5 * diversity;
 
+    // Market: average estimated gross revenue of the main crops (cover crops earn no direct income)
+    const market = mains.reduce((s, c) => s + marketScore(c), 0) / mains.length;
+    const avgMarketUSD = mains.reduce((s, c) => s + (c.marketValue || 0), 0) / mains.length;
+
     return {
-        factors: { water, soil: soilScore, climate, rotation },
-        details: { all, wins, tightestWater, tightClimate, wetness, bare, heavy, hasLegume, families }
+        factors: { water, soil: soilScore, climate, rotation, market },
+        details: { all, wins, tightestWater, tightClimate, wetness, bare, heavy, hasLegume, families, avgMarketUSD }
     };
 }
 
@@ -669,6 +693,10 @@ function explainRotation(seq, profile, soil, evalOptions, d, baselineDetails) {
     // Climate
     reasons.push(`Tightest climate fit is ${d.tightClimate.crop.name}: ${growingWindow(d.tightClimate.crop, profile).heat} days at 32°C or above in its growing window, and ${profile.avgFrostDaysPerYear} frost days/yr here (${profile.source}).`);
 
+    // Market
+    reasons.push(`Estimated gross market value averages about $${Math.round(d.avgMarketUSD).toLocaleString()}/acre per year across the main crops (approximate national figures, before costs).`);
+    if (seq.cover) reasons.push(`${seq.cover.crop.name} has no direct sale income, so it is not counted in market value.`);
+
     // Soil data
     if (soil && soil.organicMatterPct != null) {
         reasons.push(`Soil organic matter is ${soil.organicMatterPct}% (USDA SSURGO).`);
@@ -689,7 +717,8 @@ function explainRotation(seq, profile, soil, evalOptions, d, baselineDetails) {
     if (profile.source !== "NASA POWER") gaps.push("NASA POWER data was unavailable; climate values are rough estimates from the manual dropdowns, with no seasonal or year-to-year data.");
     gaps.push("Location-level estimates only; no field-scale data (NDVI, ECOSTRESS, slope) yet.");
     gaps.push("Growing seasons are approximated by fixed month windows, not real planting and harvest dates.");
-    gaps.push("Crop thresholds and rotation rules are approximate, and market or income is not scored. A local agronomist or extension office should validate this.");
+    gaps.push("Crop thresholds and rotation rules are approximate. A local agronomist or extension office should validate this.");
+    gaps.push("Market values are rough national gross revenue per acre, not profit and not local prices. Check USDA AMS Market News for your area.");
 
     const sources = (profile.source === "NASA POWER" ? 1 : 0) + (soil ? 1 : 0);
     const confidence = sources === 2 ? "Medium" : sources === 1 ? "Low-Medium" : "Low";
@@ -755,39 +784,61 @@ function buildCandidates(suitable) {
 
 const seqKey = seq => seq.years.map(c => c.id).sort().join("|") + (seq.cover ? "+" + seq.cover.crop.id : "");
 
+// Turn the farmer's ticked crops (in the order they ticked them) into a rotation.
+function buildExistingSeq(ids) {
+    const crops = ids.map(id => CROP_DATABASE.find(c => c.id === id)).filter(Boolean);
+    const mains = crops.filter(c => !COVER_IDS.has(c.id));
+    const cover = crops.find(c => COVER_IDS.has(c.id));
+    if (!mains.length) return null;   // only cover crops ticked: nothing to compare
+    let cov = null;
+    if (cover) {
+        const gaps = [];
+        for (let p = 0; p < mains.length; p++)
+            if (coverFits(mains[p], cover, mains[(p + 1) % mains.length])) gaps.push(p);
+        if (gaps.length) cov = { crop: cover, gaps };
+    }
+    return { years: mains, cover: cov };
+}
+
 function recommend(profile, soil, options = {}) {
-    const { existingIds = ["corn", "soybeans"], irrigated = false } = options;
+    const { existingIds = [], irrigated = false, weights = null } = options;
     const evalOptions = { irrigated };
+    const primaryWeights = weights || PRESETS["Balanced"];   // the existing rotation is judged on the same weights as the top pick
     const sel = selectSuitableCrops(profile, soil, evalOptions);
     const candidates = buildCandidates(sel.suitableCrops);
 
     // Existing rotation: same scoring, no suitability filter, so its problems show up as risks
     let baseline = null, baselineDetails = null;
-    const existing = existingIds.map(id => CROP_DATABASE.find(c => c.id === id)).filter(Boolean);
-    if (existing.length) {
-        const seq = { years: existing, cover: null };
-        const f = computeFactors(seq, profile, soil);
+    const baseSeq = buildExistingSeq(existingIds);
+    if (baseSeq) {
+        const f = computeFactors(baseSeq, profile, soil);
         baselineDetails = f.details;
         baseline = {
-            label: "Existing rotation", seq, factors: f.factors,
-            total: totalScore(f.factors, PRESETS["Balanced"]),
-            ...explainRotation(seq, profile, soil, evalOptions, f.details, null)
+            label: "Existing rotation", seq: baseSeq, factors: f.factors,
+            total: totalScore(f.factors, primaryWeights),
+            ...explainRotation(baseSeq, profile, soil, evalOptions, f.details, null)
         };
     }
 
-    // Score every candidate once, then pick the best per preset
+    // Score every candidate once, then pick the best per weight set
     const scored = candidates.map(seq => ({ seq, ...computeFactors(seq, profile, soil) }));
+    const plan = weights
+        ? [["Your priorities", weights], ...Object.entries(PRESETS)]
+        : [["Program's pick (balanced)", PRESETS["Balanced"]],
+           ...Object.entries(PRESETS).filter(([k]) => k !== "Balanced")];
+
     const used = new Set();
     const strategies = [];
-    for (const [label, weights] of Object.entries(PRESETS)) {
+    for (const [label, w] of plan) {
+        if (strategies.length >= 3) break;
         const ranked = scored
-            .map(c => ({ ...c, total: totalScore(c.factors, weights) }))
+            .map(c => ({ ...c, total: totalScore(c.factors, w) }))
             .sort((a, b) => b.total - a.total);
         const pick = ranked.find(r => !used.has(seqKey(r.seq)));
         if (!pick) continue;
         used.add(seqKey(pick.seq));
         strategies.push({
-            label, weights, seq: pick.seq, factors: pick.factors, total: pick.total,
+            label, weights: w, seq: pick.seq, factors: pick.factors, total: pick.total,
             ...explainRotation(pick.seq, profile, soil, evalOptions, pick.details, baselineDetails)
         });
     }
@@ -815,11 +866,12 @@ function formatStrategy(s) {
     const f = s.factors;
     const lines = [];
     lines.push(`${s.label}  (score ${pct(s.total)}/100, confidence: ${s.confidence})`);
-    lines.push(`  Water ${pct(f.water)} | Soil ${pct(f.soil)} | Climate ${pct(f.climate)} | Rotation order ${pct(f.rotation)}`);
+    lines.push(`  Water ${pct(f.water)} | Soil ${pct(f.soil)} | Climate ${pct(f.climate)} | Rotation order ${pct(f.rotation)} | Market ${pct(f.market)}`);
     lines.push("  The rotation (repeats after the last year):");
     describeRotation(s.seq).forEach(l => lines.push(`    ${l}`));
     lines.push("  What each crop brings:");
-    s.seq.years.concat(s.seq.cover ? [s.seq.cover.crop] : []).forEach(c => lines.push(`    - ${c.name}: ${c.reason}`));
+    s.seq.years.concat(s.seq.cover ? [s.seq.cover.crop] : []).forEach(c =>
+        lines.push(`    - ${c.name} (${c.marketValue ? "approx. $" + c.marketValue.toLocaleString() + "/acre gross" : "no direct sale income"}): ${c.reason}`));
     lines.push("  Why this rotation:");
     s.reasons.forEach(r => lines.push(`    - ${r}`));
     lines.push("  Risks:");
@@ -843,10 +895,12 @@ function formatRecommendation(result) {
     out.push(`Recommended rotation: ${rotationTitle(strategies[0].seq)}`);
     if (baseline) out.push(`Compared with your existing rotation (${rotationTitle(baseline.seq)}), which scores ${pct(baseline.total)}/100.`);
     out.push(`Data source: ${profile.source}${result.soil ? " + USDA SSURGO" : ""}. ${result.candidateCount} possible rotations were scored.`);
+    if (result.priorityNote) out.push(result.priorityNote);
     if (result.userEdits)
         out.push(result.userEdits.length ? `You confirmed the inputs after correcting: ${result.userEdits.join("; ")}.` : "You confirmed the inputs without changes.");
     strategies.forEach(s => { out.push(""); out.push(formatStrategy(s)); });
     if (baseline) { out.push(""); out.push(formatStrategy(baseline)); }
+    else out.push("\nNo current crops were entered, so there is no comparison with an existing rotation.");
     out.push("");
     out.push("This tool supports your decisions. It does not replace local agronomic expertise.");
     return out.join("\n");
@@ -930,12 +984,15 @@ async function runApiTest(label, testLat, testLon, options = {}) {
     }
 }
 
-// Run sequentially so the console output stays readable.
+// Auto-run is commented out so the page does not make 3 extra API calls on every load.
+// Uncomment to test from the console. recommend() no longer assumes an existing rotation, so pass existingIds.
+/*
 (async () => {
-    await runApiTest("Ames, Iowa", 42.0308, -93.6319);
-    await runApiTest("Lubbock, Texas (drier, hotter), rainfed", 33.5779, -101.8552);
-    await runApiTest("Lubbock, Texas, with irrigation", 33.5779, -101.8552, { irrigated: true });
+    await runApiTest("Ames, Iowa", 42.0308, -93.6319, { existingIds: ["corn", "soybeans"] });
+    await runApiTest("Lubbock, Texas (drier, hotter), rainfed", 33.5779, -101.8552, { existingIds: ["corn", "soybeans"] });
+    await runApiTest("Lubbock, Texas, with irrigation", 33.5779, -101.8552, { irrigated: true, existingIds: ["corn", "soybeans"] });
 })();
+*/
 
 
 
@@ -1125,9 +1182,10 @@ if (userForm) {
 
 
 /* ---------------------------------------------------------------------
-   12. CONFIRMATION POP-UP
+   12. CONFIRMATION POP-UP + PRIORITIES POP-UP
    After a location is picked, show what the code found and let the farmer
-   correct it before any recommendation is made.
+   correct it (and list their current crops). Then ask for their priorities
+   before any recommendation is made.
    --------------------------------------------------------------------- */
 
 const DRAINAGE_CLASSES = [
@@ -1136,6 +1194,7 @@ const DRAINAGE_CLASSES = [
 ];
 
 let confirmToken = null;   // identifies the latest pop-up request, so a slow lookup cannot overwrite a newer one
+let confirmExisting = [];  // crop ids the farmer ticked, in the order they ticked them
 
 // Small helper for building elements safely (text is never parsed as HTML).
 function el(tag, attrs = {}, ...kids) {
@@ -1165,6 +1224,9 @@ function injectConfirmStyles() {
 .confirm-row small{color:#607d8b;}
 .confirm-row input[type=number],.confirm-row select{padding:6px 8px;border:1px solid #90a4ae;border-radius:8px;font-size:1rem;background:#fff;}
 .confirm-check{display:flex;align-items:center;gap:8px;margin:12px 0;}
+.confirm-check small{color:#607d8b;}
+.crop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:4px 10px;max-height:170px;overflow-y:auto;border:1px solid #cfd8dc;border-radius:8px;padding:8px;background:#fff;}
+.crop-opt{display:flex;align-items:center;gap:6px;font-size:0.9rem;}
 #cf-error{color:#c62828;min-height:1.2em;margin-top:6px;}
 .confirm-buttons{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;}
 .confirm-buttons button{padding:10px 16px;border-radius:24px;border:2px solid black;font-size:1rem;cursor:pointer;}
@@ -1201,6 +1263,7 @@ async function openConfirmation(lat, lon) {
     const token = Symbol("confirm");
     confirmToken = token;
 
+    document.getElementById("confirm-title").textContent = "Please double-check this information";
     body.replaceChildren(el("p", { class: "confirm-intro", text: `Looking up NASA climate and USDA soil data for ${lat.toFixed(4)}, ${lon.toFixed(4)}...` }));
     overlay.style.display = "flex";
 
@@ -1220,10 +1283,29 @@ function numberInput(id, value, min, max, step = "1") {
     return input;
 }
 
+// Typical two-crop rotations, tried in order. The first pair where both crops pass the
+// climate and soil checks (rainfed) becomes the default "current rotation" shown to the farmer.
+const DEFAULT_ROTATIONS = [
+    ["corn", "soybeans"],
+    ["cotton", "peanuts"],
+    ["winter_wheat", "sorghum"],
+    ["spring_wheat", "canola"]
+];
+
+function guessExistingRotation(profile, soil) {
+    for (const ids of DEFAULT_ROTATIONS) {
+        const crops = ids.map(id => CROP_DATABASE.find(c => c.id === id));
+        if (crops.every(c => c.isSuitableFor(profile, soil, {}))) return ids;
+    }
+    return ["corn", "soybeans"];
+}
+
 function renderConfirmation(lat, lon, weather, soil) {
     const body = document.getElementById("confirm-body");
     const profile = buildProfile(weather, getManualInputs());
     const live = !!weather;
+    document.getElementById("confirm-title").textContent = "Please double-check this information";
+    confirmExisting = [];
     body.replaceChildren();
 
     body.append(el("p", { class: "confirm-intro",
@@ -1263,12 +1345,63 @@ function renderConfirmation(lat, lon, weather, soil) {
 
     // ---- Farm options
     body.append(el("h3", { text: "Your farm" }));
+    const nameOf = id => CROP_DATABASE.find(x => x.id === id).name;
+    const guess = guessExistingRotation(profile, soil);
+    confirmExisting = [...guess];
+
+    body.append(el("p", { class: "confirm-info",
+        text: `We assumed your current rotation is: ${guess.map(nameOf).join(" → ")}. This is a typical rotation for your climate and soil, not something we detected on your field. Is that correct?` }));
+    const yes = el("input", { id: "cf-rot-yes", type: "radio", name: "cf-rot" });
+    const no = el("input", { id: "cf-rot-no", type: "radio", name: "cf-rot" });
+    yes.checked = true;
+    body.append(
+        el("div", { class: "confirm-check" }, yes, el("label", { for: "cf-rot-yes", text: "Yes, that is my rotation" })),
+        el("div", { class: "confirm-check" }, no, el("label", { for: "cf-rot-no", text: "No, let me change it" })));
+
+    const editHint = el("p", { class: "confirm-info",
+        text: "Tick the crops you grow now, in the order you rotate them. Clear every box if you do not have a rotation to compare." });
+    const orderNote = el("p", { class: "confirm-info" });
+    const grid = el("div", { id: "cf-crops", class: "crop-grid" });
+    const cropBoxes = {};
+    const refreshOrder = () => {
+        orderNote.textContent = confirmExisting.length
+            ? "Current rotation: " + confirmExisting.map(nameOf).join(" → ")
+            : "Current rotation: none selected";
+    };
+    CROP_DATABASE.forEach(c => {
+        const cb = el("input", { type: "checkbox", id: `cf-crop-${c.id}`, value: c.id });
+        cb.checked = guess.includes(c.id);
+        cropBoxes[c.id] = cb;
+        cb.addEventListener("change", () => {
+            if (cb.checked) confirmExisting.push(c.id);
+            else confirmExisting = confirmExisting.filter(id => id !== c.id);
+            refreshOrder();
+        });
+        grid.append(el("label", { class: "crop-opt" }, cb, document.createTextNode(c.name)));
+    });
+    const showEditor = show => {
+        editHint.style.display = show ? "" : "none";
+        grid.style.display = show ? "" : "none";
+        orderNote.style.display = show ? "" : "none";
+    };
+    showEditor(false);
+    refreshOrder();
+    yes.addEventListener("change", () => {
+        if (!yes.checked) return;
+        confirmExisting = [...guess];                                   // back to the program's guess
+        Object.entries(cropBoxes).forEach(([id, b]) => { b.checked = guess.includes(id); });
+        refreshOrder();
+        showEditor(false);
+    });
+    no.addEventListener("change", () => { if (no.checked) showEditor(true); });
+    body.append(editHint, grid, orderNote);
+
     const irrig = el("input", { id: "cf-irrigation", type: "checkbox" });
     body.append(el("div", { class: "confirm-check" }, irrig,
         el("label", { for: "cf-irrigation", text: "I can irrigate my fields (a rain shortfall becomes a warning instead of ruling a crop out)" })));
 
     body.append(el("p", { id: "cf-error" }));
-    const confirmBtn = el("button", { id: "cf-confirm", type: "button", text: "Yes, this looks right. Get my recommendation" });
+    const confirmBtn = el("button", { id: "cf-confirm", type: "button", text: "Yes, this looks right. Continue" });
     const cancelBtn = el("button", { id: "cf-cancel", type: "button", text: "Cancel" });
     body.append(el("div", { class: "confirm-buttons" }, cancelBtn, confirmBtn));
 
@@ -1277,8 +1410,8 @@ function renderConfirmation(lat, lon, weather, soil) {
         const v = readConfirmValues();
         if (v.error) { document.getElementById("cf-error").textContent = v.error; return; }
         const { profile: p, soil: s, edits } = applyConfirmedValues(profile, soil, v);
-        closeConfirm();
-        showRecommendation(p, s, { irrigated: v.irrigated }, edits);
+        // Don't close the overlay: swap its content for the priorities pop-up
+        renderPriorities(p, s, { irrigated: v.irrigated, existingIds: v.existingIds }, edits);
     });
     if (confirmBtn.focus) confirmBtn.focus();
 }
@@ -1300,7 +1433,8 @@ function readConfirmValues() {
     return {
         rain: rain.value, heat: heat.value, frost: frost.value, om: om.value,
         drainage: document.getElementById("cf-drainage").value,
-        irrigated: !!document.getElementById("cf-irrigation").checked
+        irrigated: !!document.getElementById("cf-irrigation").checked,
+        existingIds: [...confirmExisting]
     };
 }
 
@@ -1356,10 +1490,68 @@ function applyConfirmedValues(profile, soil, v) {
     return { profile: p, soil: s, edits };
 }
 
+// ---- Priorities pop-up (second step, shown after the confirmation) ----
+const PRIORITY_OPTIONS = [
+    { key: "market",   label: "Market value / income",           hint: "favor crops with higher estimated revenue per acre" },
+    { key: "water",    label: "Water conservation",              hint: "favor low-water crops that fit your rainfall" },
+    { key: "soil",     label: "Soil health & erosion control",   hint: "less bare ground, more cover and erosion-control crops" },
+    { key: "climate",  label: "Heat & frost resilience",         hint: "crops with the most headroom against local extremes" },
+    { key: "rotation", label: "Natural fertility & pest breaks", hint: "nitrogen fixers before heavy feeders, more plant-family variety" }
+];
+
+function renderPriorities(profile, soil, options, edits) {
+    const body = document.getElementById("confirm-body");
+    document.getElementById("confirm-title").textContent = "What matters most to you?";
+    body.replaceChildren();
+    body.append(el("p", { class: "confirm-intro",
+        text: "Tick everything that matters to you. We will weight those goals more heavily when suggesting rotations." }));
+
+    const boxes = {};
+    PRIORITY_OPTIONS.forEach(o => {
+        const cb = el("input", { id: `pr-${o.key}`, type: "checkbox" });
+        boxes[o.key] = cb;
+        body.append(el("div", { class: "confirm-check" }, cb,
+            el("label", { for: `pr-${o.key}` }, el("strong", { text: o.label }), el("small", { text: ` (${o.hint})` }))));
+    });
+
+    const none = el("input", { id: "pr-none", type: "checkbox" });
+    body.append(el("h3", { text: "Or" }));
+    body.append(el("div", { class: "confirm-check" }, none,
+        el("label", { for: "pr-none" }, el("strong", { text: "No preference: let the program decide" }))));
+
+    // "No preference" and the specific priorities exclude each other
+    none.addEventListener("change", () => { if (none.checked) Object.values(boxes).forEach(b => { b.checked = false; }); });
+    Object.values(boxes).forEach(b => b.addEventListener("change", () => { if (b.checked) none.checked = false; }));
+
+    body.append(el("p", { id: "cf-error" }));
+    const goBtn = el("button", { id: "cf-confirm", type: "button", text: "Get my recommendation" });
+    const cancelBtn = el("button", { id: "cf-cancel", type: "button", text: "Cancel" });
+    body.append(el("div", { class: "confirm-buttons" }, cancelBtn, goBtn));
+
+    cancelBtn.addEventListener("click", closeConfirm);
+    goBtn.addEventListener("click", () => {
+        const chosen = PRIORITY_OPTIONS.filter(o => boxes[o.key].checked);
+        if (!none.checked && !chosen.length) {
+            document.getElementById("cf-error").textContent = "Pick at least one priority, or choose \"No preference\".";
+            return;
+        }
+        let weights = null, priorityNote;
+        if (chosen.length) {
+            weights = { water: 1, soil: 1, climate: 1, rotation: 1, market: 1 };
+            chosen.forEach(o => { weights[o.key] = 3; });
+            priorityNote = `Your priorities: ${chosen.map(o => o.label).join(", ")}.`;
+        } else {
+            priorityNote = "No preferences were set, so the program weighed all factors equally and chose for you.";
+        }
+        closeConfirm();
+        showRecommendation(profile, soil, { ...options, weights, priorityNote }, edits);
+    });
+}
+
 // Run the recommendation on the confirmed data and show it.
 function showRecommendation(profile, soil, options, edits) {
     try {
-        const result = { profile, soil, ...recommend(profile, soil, options), userEdits: edits };
+        const result = { profile, soil, ...recommend(profile, soil, options), userEdits: edits, priorityNote: options.priorityNote };
         const text = formatRecommendation(result);
         console.log(text);
         const top = result.strategies[0];
@@ -1370,13 +1562,14 @@ function showRecommendation(profile, soil, options, edits) {
     }
 }
 
-//enter error fixed
-
+// Enter key in the location box: run the same search as the button.
 const locationInput = document.getElementById("location-input");
 
-locationInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-        event.preventDefault(); // Stop the browser's default Enter behavior
-        resolveLocation();      // Run your location search
-    }
-});
+if (locationInput) {
+    locationInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            if (locationSearchBtn) locationSearchBtn.click();
+        }
+    });
+}
